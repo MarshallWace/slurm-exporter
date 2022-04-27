@@ -30,7 +30,8 @@ type NodesMetrics struct {
 	alloc float64
 	comp  float64
 	down  float64
-	drain float64
+	drained float64
+        draining float64
 	err   float64
 	fail  float64
 	idle  float64
@@ -76,7 +77,8 @@ func ParseNodesMetrics(input []byte) *NodesMetrics {
 			alloc := regexp.MustCompile(`^alloc`)
 			comp := regexp.MustCompile(`^comp`)
 			down := regexp.MustCompile(`^down`)
-			drain := regexp.MustCompile(`^drain`)
+			draining := regexp.MustCompile(`^draining`)
+                        drained := regexp.MustCompile(`^drained`)
 			fail := regexp.MustCompile(`^fail`)
 			err := regexp.MustCompile(`^err`)
 			idle := regexp.MustCompile(`^idle`)
@@ -90,8 +92,10 @@ func ParseNodesMetrics(input []byte) *NodesMetrics {
 				nm.comp += count
 			case down.MatchString(state) == true:
 				nm.down += count
-			case drain.MatchString(state) == true:
-				nm.drain += count
+			case draining.MatchString(state) == true:
+				nm.draining += count
+                        case drained.MatchString(state) == true:
+                                nm.drained += count
 			case fail.MatchString(state) == true:
 				nm.fail += count
 			case err.MatchString(state) == true:
@@ -138,7 +142,8 @@ func NewNodesCollector() *NodesCollector {
 		alloc: prometheus.NewDesc("slurm_nodes_alloc", "Allocated nodes", nil, nil),
 		comp:  prometheus.NewDesc("slurm_nodes_comp", "Completing nodes", nil, nil),
 		down:  prometheus.NewDesc("slurm_nodes_down", "Down nodes", nil, nil),
-		drain: prometheus.NewDesc("slurm_nodes_drain", "Drain nodes", nil, nil),
+		draining: prometheus.NewDesc("slurm_nodes_draining", "Draining nodes", nil, nil),
+                drained: prometheus.NewDesc("slurm_nodes_drained", "Draining nodes", nil, nil),
 		err:   prometheus.NewDesc("slurm_nodes_err", "Error nodes", nil, nil),
 		fail:  prometheus.NewDesc("slurm_nodes_fail", "Fail nodes", nil, nil),
 		idle:  prometheus.NewDesc("slurm_nodes_idle", "Idle nodes", nil, nil),
@@ -152,7 +157,8 @@ type NodesCollector struct {
 	alloc *prometheus.Desc
 	comp  *prometheus.Desc
 	down  *prometheus.Desc
-	drain *prometheus.Desc
+	draining *prometheus.Desc
+        drained *prometheus.Desc
 	err   *prometheus.Desc
 	fail  *prometheus.Desc
 	idle  *prometheus.Desc
@@ -166,7 +172,8 @@ func (nc *NodesCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- nc.alloc
 	ch <- nc.comp
 	ch <- nc.down
-	ch <- nc.drain
+	ch <- nc.draining
+        ch <- nc.drained
 	ch <- nc.err
 	ch <- nc.fail
 	ch <- nc.idle
@@ -179,7 +186,8 @@ func (nc *NodesCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(nc.alloc, prometheus.GaugeValue, nm.alloc)
 	ch <- prometheus.MustNewConstMetric(nc.comp, prometheus.GaugeValue, nm.comp)
 	ch <- prometheus.MustNewConstMetric(nc.down, prometheus.GaugeValue, nm.down)
-	ch <- prometheus.MustNewConstMetric(nc.drain, prometheus.GaugeValue, nm.drain)
+	ch <- prometheus.MustNewConstMetric(nc.draining, prometheus.GaugeValue, nm.draining)
+        ch <- prometheus.MustNewConstMetric(nc.drained, prometheus.GaugeValue, nm.drained)
 	ch <- prometheus.MustNewConstMetric(nc.err, prometheus.GaugeValue, nm.err)
 	ch <- prometheus.MustNewConstMetric(nc.fail, prometheus.GaugeValue, nm.fail)
 	ch <- prometheus.MustNewConstMetric(nc.idle, prometheus.GaugeValue, nm.idle)
