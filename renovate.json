@@ -1,0 +1,21 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "packageRules": [
+    {
+      "matchPackagePatterns": [
+        "*"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "all non-major dependencies",
+      "groupSlug": "all-minor-patch",
+      "prPriority": 1,
+      "automerge": false
+    }
+  ],
+  "prHourlyLimit": 1,
+  "prConcurrentLimit": 4,
+  "enabled": true
+}
