@@ -18,7 +18,7 @@ go/modules/pkg/mod: go.mod
 
 .PHONY: test
 test: go/modules/pkg/mod $(GOFILES)
-	go test -v
+	go test -v ./...
 
 run: $(GOBIN)
 	$(GOBIN)
