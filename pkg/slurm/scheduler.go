@@ -16,9 +16,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 package slurm
 
 import (
-	"io/ioutil"
-	"log"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -48,27 +45,11 @@ type SchedulerMetrics struct {
 	total_backfilled_heterogeneous    float64
 }
 
-// Execute the sdiag command and return its output
-func SchedulerData() []byte {
-	cmd := exec.Command("sdiag")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := cmd.Start(); err != nil {
-		log.Fatal(err)
-	}
-	out, _ := ioutil.ReadAll(stdout)
-	if err := cmd.Wait(); err != nil {
-		log.Fatal(err)
-	}
-	return out
-}
-
 // Extract the relevant metrics from the sdiag output
-func ParseSchedulerMetrics(input []byte) *SchedulerMetrics {
+func SchedulerGetMetrics() *SchedulerMetrics {
 	var sm SchedulerMetrics
-	lines := strings.Split(string(input), "\n")
+	out := execCommand("sdiag")
+	lines := strings.Split(out, "\n")
 	// Guard variables to check for string repetitions in the output of sdiag
 	// (two occurencies of the following strings: 'Last cycle', 'Mean cycle')
 	lc_count := 0
@@ -123,11 +104,6 @@ func ParseSchedulerMetrics(input []byte) *SchedulerMetrics {
 		}
 	}
 	return &sm
-}
-
-// Returns the scheduler metrics
-func SchedulerGetMetrics() *SchedulerMetrics {
-	return ParseSchedulerMetrics(SchedulerData())
 }
 
 /*

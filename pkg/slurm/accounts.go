@@ -16,31 +16,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 package slurm
 
 import (
-	"io/ioutil"
-	"log"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
-
-func AccountsData() []byte {
-	cmd := exec.Command("squeue", "-a", "-r", "-h", "-o %A|%a|%T|%C")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := cmd.Start(); err != nil {
-		log.Fatal(err)
-	}
-	out, _ := ioutil.ReadAll(stdout)
-	if err := cmd.Wait(); err != nil {
-		log.Fatal(err)
-	}
-	return out
-}
 
 type JobMetrics struct {
 	pending      float64
@@ -49,9 +30,11 @@ type JobMetrics struct {
 	suspended    float64
 }
 
-func ParseAccountsMetrics(input []byte) map[string]*JobMetrics {
+func ParseAccountsMetrics() map[string]*JobMetrics {
+	out := execCommand("squeue -a -r -h -o %A|%a|%T|%C")
+
 	accounts := make(map[string]*JobMetrics)
-	lines := strings.Split(string(input), "\n")
+	lines := strings.Split(out, "\n")
 	for _, line := range lines {
 		if strings.Contains(line, "|") {
 			account := strings.Split(line, "|")[1]
@@ -104,7 +87,7 @@ func (ac *AccountsCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (ac *AccountsCollector) Collect(ch chan<- prometheus.Metric) {
-	am := ParseAccountsMetrics(AccountsData())
+	am := ParseAccountsMetrics()
 	for a := range am {
 		if am[a].pending > 0 {
 			ch <- prometheus.MustNewConstMetric(ac.pending, prometheus.GaugeValue, am[a].pending, a)

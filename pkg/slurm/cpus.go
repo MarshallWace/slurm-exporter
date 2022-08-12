@@ -16,9 +16,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 package slurm
 
 import (
-	"io/ioutil"
-	"log"
-	"os/exec"
 	"strconv"
 	"strings"
 
@@ -33,36 +30,16 @@ type CPUsMetrics struct {
 }
 
 func CPUsGetMetrics() *CPUsMetrics {
-	return ParseCPUsMetrics(CPUsData())
-}
-
-func ParseCPUsMetrics(input []byte) *CPUsMetrics {
+	out := execCommand("sinfo -h -o %C")
 	var cm CPUsMetrics
-	if strings.Contains(string(input), "/") {
-		splitted := strings.Split(strings.TrimSpace(string(input)), "/")
+	if strings.Contains(out, "/") {
+		splitted := strings.Split(strings.TrimSpace(out), "/")
 		cm.alloc, _ = strconv.ParseFloat(splitted[0], 64)
 		cm.idle, _ = strconv.ParseFloat(splitted[1], 64)
 		cm.other, _ = strconv.ParseFloat(splitted[2], 64)
 		cm.total, _ = strconv.ParseFloat(splitted[3], 64)
 	}
 	return &cm
-}
-
-// Execute the sinfo command and return its output
-func CPUsData() []byte {
-	cmd := exec.Command("sinfo", "-h", "-o %C")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := cmd.Start(); err != nil {
-		log.Fatal(err)
-	}
-	out, _ := ioutil.ReadAll(stdout)
-	if err := cmd.Wait(); err != nil {
-		log.Fatal(err)
-	}
-	return out
 }
 
 /*

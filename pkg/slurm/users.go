@@ -16,31 +16,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 package slurm
 
 import (
-	"io/ioutil"
-	"log"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
-
-func UsersData() []byte {
-	cmd := exec.Command("squeue", "-a", "-r", "-h", "-o %A|%u|%T|%C")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := cmd.Start(); err != nil {
-		log.Fatal(err)
-	}
-	out, _ := ioutil.ReadAll(stdout)
-	if err := cmd.Wait(); err != nil {
-		log.Fatal(err)
-	}
-	return out
-}
 
 type UserJobMetrics struct {
 	pending      float64
@@ -49,9 +30,10 @@ type UserJobMetrics struct {
 	suspended    float64
 }
 
-func ParseUsersMetrics(input []byte) map[string]*UserJobMetrics {
+func ParseUsersMetrics() map[string]*UserJobMetrics {
 	users := make(map[string]*UserJobMetrics)
-	lines := strings.Split(string(input), "\n")
+	out := execCommand("squeue -a -r -h -o %A|%u|%T|%C")
+	lines := strings.Split(out, "\n")
 	for _, line := range lines {
 		if strings.Contains(line, "|") {
 			user := strings.Split(line, "|")[1]
@@ -104,7 +86,7 @@ func (uc *UsersCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (uc *UsersCollector) Collect(ch chan<- prometheus.Metric) {
-	um := ParseUsersMetrics(UsersData())
+	um := ParseUsersMetrics()
 	for u := range um {
 		if um[u].pending > 0 {
 			ch <- prometheus.MustNewConstMetric(uc.pending, prometheus.GaugeValue, um[u].pending, u)

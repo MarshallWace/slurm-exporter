@@ -16,8 +16,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 package slurm
 
 import (
-	"log"
-	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,15 +34,12 @@ type NodeMetrics struct {
 	nodeStatus string
 }
 
-func NodeGetMetrics() map[string]*NodeMetrics {
-	return ParseNodeMetrics(NodeData())
-}
-
-// ParseNodeMetrics takes the output of sinfo with node data
+// NodeGetMetrics takes the output of sinfo with node data
 // It returns a map of metrics per node
-func ParseNodeMetrics(input []byte) map[string]*NodeMetrics {
+func NodeGetMetrics() map[string]*NodeMetrics {
+	out := execCommand("sinfo -h -N -O NodeList,AllocMem,Memory,CPUsState,StateLong")
 	nodes := make(map[string]*NodeMetrics)
-	lines := strings.Split(string(input), "\n")
+	lines := strings.Split(out, "\n")
 
 	// Sort and remove all the duplicates from the 'sinfo' output
 	sort.Strings(lines)
@@ -76,17 +71,6 @@ func ParseNodeMetrics(input []byte) map[string]*NodeMetrics {
 	}
 
 	return nodes
-}
-
-// NodeData executes the sinfo command to get data for each node
-// It returns the output of the sinfo command
-func NodeData() []byte {
-	cmd := exec.Command("sinfo", "-h", "-N", "-O", "NodeList,AllocMem,Memory,CPUsState,StateLong")
-	out, err := cmd.Output()
-	if err != nil {
-		log.Fatal(err)
-	}
-	return out
 }
 
 type NodeCollector struct {

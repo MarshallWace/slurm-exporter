@@ -16,62 +16,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 package slurm
 
 import (
-	"io/ioutil"
-	"log"
-	"os/exec"
 	"strconv"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
-
-func PartitionsData() []byte {
-	cmd := exec.Command("sinfo", "-h", "-o%R,%C")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := cmd.Start(); err != nil {
-		log.Fatal(err)
-	}
-	out, _ := ioutil.ReadAll(stdout)
-	if err := cmd.Wait(); err != nil {
-		log.Fatal(err)
-	}
-	return out
-}
-
-func PartitionsRunningJobsData() []byte {
-	cmd := exec.Command("squeue", "-a", "-r", "-h", "-o%P", "--states=RUNNING")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := cmd.Start(); err != nil {
-		log.Fatal(err)
-	}
-	out, _ := ioutil.ReadAll(stdout)
-	if err := cmd.Wait(); err != nil {
-		log.Fatal(err)
-	}
-	return out
-}
-
-func PartitionsPendingJobsData() []byte {
-	cmd := exec.Command("squeue", "-a", "-r", "-h", "-o%P", "--states=PENDING")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := cmd.Start(); err != nil {
-		log.Fatal(err)
-	}
-	out, _ := ioutil.ReadAll(stdout)
-	if err := cmd.Wait(); err != nil {
-		log.Fatal(err)
-	}
-	return out
-}
 
 type PartitionMetrics struct {
 	allocated float64
@@ -84,7 +33,8 @@ type PartitionMetrics struct {
 
 func ParsePartitionsMetrics() map[string]*PartitionMetrics {
 	partitions := make(map[string]*PartitionMetrics)
-	lines := strings.Split(string(PartitionsData()), "\n")
+	out := execCommand("sinfo -h -o%R,%C")
+	lines := strings.Split(out, "\n")
 	for _, line := range lines {
 		if strings.Contains(line, ",") {
 			// name of a partition
@@ -105,7 +55,8 @@ func ParsePartitionsMetrics() map[string]*PartitionMetrics {
 		}
 	}
 	// get list of pending jobs by partition name
-	list := strings.Split(string(PartitionsPendingJobsData()), "\n")
+	pendingOut := execCommand("squeue -a -r -h -o%P --states=PENDING")
+	list := strings.Split(pendingOut, "\n")
 	for _, partition := range list {
 		// accumulate the number of pending jobs
 		_, key := partitions[partition]
@@ -115,7 +66,8 @@ func ParsePartitionsMetrics() map[string]*PartitionMetrics {
 	}
 
 	// get list of running jobs by partition name
-	list_r := strings.Split(string(PartitionsRunningJobsData()), "\n")
+	runningOut := execCommand("squeue -a -r -h -o%P --states=RUNNING")
+	list_r := strings.Split(runningOut, "\n")
 	for _, partition := range list_r {
 		// accumulate the number of running jobs
 		_, key := partitions[partition]

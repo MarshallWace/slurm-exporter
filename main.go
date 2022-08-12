@@ -37,6 +37,7 @@ func init() {
 	prometheus.MustRegister(slurm.NewSchedulerCollector())  // from scheduler.go
 	prometheus.MustRegister(slurm.NewFairShareCollector())  // from sshare.go
 	prometheus.MustRegister(slurm.NewUsersCollector())      // from users.go
+	prometheus.MustRegister(slurm.ExporterErrors)
 }
 
 var listenAddress = flag.String(
