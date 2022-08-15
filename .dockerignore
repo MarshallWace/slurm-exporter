@@ -1,0 +1,11 @@
+bin
+contrib
+.gitignore
+.dockerignore
+CHANGELOG.md
+DEVELOPMENT.md
+Dockerfile
+Jenkinfile
+LICENCE
+Makefile
+README.md
