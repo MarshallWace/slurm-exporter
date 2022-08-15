@@ -35,7 +35,7 @@ var listenAddress = flag.String(
 // Turn on GPUs accounting only if the corresponding command line option is set to true.
 var gpuAcct = flag.Bool(
 	"gpus-acct",
-	true,
+	false,
 	"Enable GPUs accounting")
 
 var execTimeoutSeconds = flag.Int(
