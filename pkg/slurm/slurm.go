@@ -111,7 +111,7 @@ func NewRegistry(gpuCollectorEnabled bool, exectimeout int) (*prometheus.Registr
 	if err != nil {
 		return nil, err
 	}
-	err = reg.Register(NewJobsCollector(false)) // from job.go
+	err = reg.Register(NewJobsCollector(false)) // from jobs.go
 	if err != nil {
 		return nil, err
 	}

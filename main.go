@@ -22,6 +22,7 @@ import (
 	"log"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/vpenso/prometheus-slurm-exporter/pkg/slurm"
 )
@@ -34,7 +35,7 @@ var listenAddress = flag.String(
 // Turn on GPUs accounting only if the corresponding command line option is set to true.
 var gpuAcct = flag.Bool(
 	"gpus-acct",
-	false,
+	true,
 	"Enable GPUs accounting")
 
 var execTimeoutSeconds = flag.Int(
@@ -55,8 +56,8 @@ func main() {
 
 	// Adding more collectors to the registry
 	reg.MustRegister(
-		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
-		prometheus.NewGoCollector(),
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+		collectors.NewGoCollector(),
 	)
 
 	// The Handler function provides a default handler to expose metrics
