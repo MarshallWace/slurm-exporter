@@ -26,25 +26,12 @@ import (
 	"github.com/vpenso/prometheus-slurm-exporter/pkg/slurm"
 )
 
-func init() {
-	// Metrics have to be registered to be exposed
-	prometheus.MustRegister(slurm.NewAccountsCollector())   // from accounts.go
-	prometheus.MustRegister(slurm.NewCPUsCollector())       // from cpus.go
-	prometheus.MustRegister(slurm.NewNodesCollector())      // from nodes.go
-	prometheus.MustRegister(slurm.NewNodeCollector())       // from node.go
-	prometheus.MustRegister(slurm.NewPartitionsCollector()) // from partitions.go
-	prometheus.MustRegister(slurm.NewQueueCollector())      // from queue.go
-	prometheus.MustRegister(slurm.NewSchedulerCollector())  // from scheduler.go
-	prometheus.MustRegister(slurm.NewFairShareCollector())  // from sshare.go
-	prometheus.MustRegister(slurm.NewUsersCollector())      // from users.go
-	prometheus.MustRegister(slurm.ExporterErrors)
-}
-
 var listenAddress = flag.String(
 	"listen-address",
 	":8080",
 	"The address to listen on for HTTP requests.")
 
+// Turn on GPUs accounting only if the corresponding command line option is set to true.
 var gpuAcct = flag.Bool(
 	"gpus-acct",
 	false,
@@ -53,15 +40,24 @@ var gpuAcct = flag.Bool(
 func main() {
 	flag.Parse()
 
-	// Turn on GPUs accounting only if the corresponding command line option is set to true.
 	if *gpuAcct {
 		prometheus.MustRegister(slurm.NewGPUsCollector()) // from gpus.go
 	}
+	reg, err := slurm.NewRegistry(*gpuAcct)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	// Adding more collectors to the registry
+	reg.MustRegister(
+		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
+		prometheus.NewGoCollector(),
+	)
 
 	// The Handler function provides a default handler to expose metrics
 	// via an HTTP server. "/metrics" is the usual endpoint for that.
 	log.Printf("Starting Server: %s", *listenAddress)
 	log.Printf("GPUs Accounting: %t", *gpuAcct)
-	http.Handle("/metrics", promhttp.Handler())
+	http.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 	log.Fatal(http.ListenAndServe(*listenAddress, nil))
 }

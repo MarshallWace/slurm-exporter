@@ -21,6 +21,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	queueCommand  = "squeue -a -r -h -o %A,%T,%r --states=all"
+	queueTestData = "./test_data/squeue.txt"
+)
+
 type QueueMetrics struct {
 	pending       float64
 	pending_dep   float64
@@ -37,10 +42,11 @@ type QueueMetrics struct {
 	out_of_memory float64
 }
 
-func QueueGetMetrics() *QueueMetrics {
+func (qc *QueueCollector) QueueGetMetrics() *QueueMetrics {
+	data := getData(qc.isTest, queueCommand, queueTestData)
+
 	var qm QueueMetrics
-	out := execCommand("squeue -a -r -h -o %A,%T,%r --states=all")
-	lines := strings.Split(out, "\n")
+	lines := strings.Split(data, "\n")
 	for _, line := range lines {
 		if strings.Contains(line, ",") {
 			splitted := strings.Split(line, ",")
@@ -85,8 +91,9 @@ func QueueGetMetrics() *QueueMetrics {
  * https://godoc.org/github.com/prometheus/client_golang/prometheus#Collector
  */
 
-func NewQueueCollector() *QueueCollector {
+func NewQueueCollector(isTest bool) *QueueCollector {
 	return &QueueCollector{
+		isTest:        isTest,
 		pending:       prometheus.NewDesc("slurm_queue_pending", "Pending jobs in queue", nil, nil),
 		pending_dep:   prometheus.NewDesc("slurm_queue_pending_dependency", "Pending jobs because of dependency in queue", nil, nil),
 		running:       prometheus.NewDesc("slurm_queue_running", "Running jobs in the cluster", nil, nil),
@@ -104,6 +111,7 @@ func NewQueueCollector() *QueueCollector {
 }
 
 type QueueCollector struct {
+	isTest        bool
 	pending       *prometheus.Desc
 	pending_dep   *prometheus.Desc
 	running       *prometheus.Desc
@@ -136,7 +144,7 @@ func (qc *QueueCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (qc *QueueCollector) Collect(ch chan<- prometheus.Metric) {
-	qm := QueueGetMetrics()
+	qm := qc.QueueGetMetrics()
 	ch <- prometheus.MustNewConstMetric(qc.pending, prometheus.GaugeValue, qm.pending)
 	ch <- prometheus.MustNewConstMetric(qc.pending_dep, prometheus.GaugeValue, qm.pending_dep)
 	ch <- prometheus.MustNewConstMetric(qc.running, prometheus.GaugeValue, qm.running)

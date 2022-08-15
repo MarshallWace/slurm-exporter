@@ -23,6 +23,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	schedulerCommand  = "sdiag"
+	schedulerTestData = "test_data/sdiag.txt"
+)
+
 /*
  * Execute the Slurm sdiag command to read the current statistics
  * from the Slurm scheduler. It will be repreatedly called by the
@@ -46,9 +51,9 @@ type SchedulerMetrics struct {
 }
 
 // Extract the relevant metrics from the sdiag output
-func SchedulerGetMetrics() *SchedulerMetrics {
+func (sc *SchedulerCollector) SchedulerGetMetrics() *SchedulerMetrics {
 	var sm SchedulerMetrics
-	out := execCommand("sdiag")
+	out := getData(sc.isTest, schedulerCommand, schedulerTestData)
 	lines := strings.Split(out, "\n")
 	// Guard variables to check for string repetitions in the output of sdiag
 	// (two occurencies of the following strings: 'Last cycle', 'Mean cycle')
@@ -114,6 +119,7 @@ func SchedulerGetMetrics() *SchedulerMetrics {
 
 // Collector strcture
 type SchedulerCollector struct {
+	isTest                            bool
 	threads                           *prometheus.Desc
 	queue_size                        *prometheus.Desc
 	dbd_queue_size                    *prometheus.Desc
@@ -146,7 +152,7 @@ func (c *SchedulerCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // Send the values of all metrics
 func (sc *SchedulerCollector) Collect(ch chan<- prometheus.Metric) {
-	sm := SchedulerGetMetrics()
+	sm := sc.SchedulerGetMetrics()
 	ch <- prometheus.MustNewConstMetric(sc.threads, prometheus.GaugeValue, sm.threads)
 	ch <- prometheus.MustNewConstMetric(sc.queue_size, prometheus.GaugeValue, sm.queue_size)
 	ch <- prometheus.MustNewConstMetric(sc.dbd_queue_size, prometheus.GaugeValue, sm.dbd_queue_size)
@@ -162,8 +168,9 @@ func (sc *SchedulerCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 // Returns the Slurm scheduler collector, used to register with the prometheus client
-func NewSchedulerCollector() *SchedulerCollector {
+func NewSchedulerCollector(isTest bool) *SchedulerCollector {
 	return &SchedulerCollector{
+		isTest: isTest,
 		threads: prometheus.NewDesc(
 			"slurm_scheduler_threads",
 			"Information provided by the Slurm sdiag command, number of scheduler threads ",

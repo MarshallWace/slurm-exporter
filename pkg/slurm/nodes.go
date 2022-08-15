@@ -24,6 +24,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	nodesCommand  = "sinfo -h -o %D,%T"
+	nodesTestData = "./test_data/sinfo.txt"
+)
+
 type NodesMetrics struct {
 	alloc    float64
 	comp     float64
@@ -55,9 +60,9 @@ func RemoveDuplicates(s []string) []string {
 	return t
 }
 
-func NodesGetMetrics() *NodesMetrics {
+func (nc *NodesCollector) GetNodesMetrics() *NodesMetrics {
 	var nm NodesMetrics
-	out := execCommand("sinfo -h -o %D,%T")
+	out := getData(nc.isTest, nodesCommand, nodesTestData)
 	lines := strings.Split(out, "\n")
 
 	// Sort and remove all the duplicates from the 'sinfo' output
@@ -115,8 +120,9 @@ func NodesGetMetrics() *NodesMetrics {
  * https://godoc.org/github.com/prometheus/client_golang/prometheus#Collector
  */
 
-func NewNodesCollector() *NodesCollector {
+func NewNodesCollector(isTest bool) *NodesCollector {
 	return &NodesCollector{
+		isTest:   isTest,
 		alloc:    prometheus.NewDesc("slurm_nodes_alloc", "Allocated nodes", nil, nil),
 		comp:     prometheus.NewDesc("slurm_nodes_comp", "Completing nodes", nil, nil),
 		down:     prometheus.NewDesc("slurm_nodes_down", "Down nodes", nil, nil),
@@ -132,6 +138,7 @@ func NewNodesCollector() *NodesCollector {
 }
 
 type NodesCollector struct {
+	isTest   bool
 	alloc    *prometheus.Desc
 	comp     *prometheus.Desc
 	down     *prometheus.Desc
@@ -160,7 +167,7 @@ func (nc *NodesCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- nc.resv
 }
 func (nc *NodesCollector) Collect(ch chan<- prometheus.Metric) {
-	nm := NodesGetMetrics()
+	nm := nc.GetNodesMetrics()
 	ch <- prometheus.MustNewConstMetric(nc.alloc, prometheus.GaugeValue, nm.alloc)
 	ch <- prometheus.MustNewConstMetric(nc.comp, prometheus.GaugeValue, nm.comp)
 	ch <- prometheus.MustNewConstMetric(nc.down, prometheus.GaugeValue, nm.down)
