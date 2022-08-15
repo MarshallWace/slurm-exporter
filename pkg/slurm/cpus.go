@@ -22,6 +22,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	CpuMetricsCommand  = "sinfo -h -o %C"
+	CpuMetricsTestData = "test_data/sinfo_cpus.txt"
+)
+
 type CPUsMetrics struct {
 	alloc float64
 	idle  float64
@@ -29,9 +34,9 @@ type CPUsMetrics struct {
 	total float64
 }
 
-func CPUsGetMetrics() *CPUsMetrics {
-	out := execCommand("sinfo -h -o %C")
+func (cc *CPUsCollector) CPUsGetMetrics() *CPUsMetrics {
 	var cm CPUsMetrics
+	out := getData(cc.isTest, CpuMetricsCommand, CpuMetricsTestData)
 	if strings.Contains(out, "/") {
 		splitted := strings.Split(strings.TrimSpace(out), "/")
 		cm.alloc, _ = strconv.ParseFloat(splitted[0], 64)
@@ -48,20 +53,22 @@ func CPUsGetMetrics() *CPUsMetrics {
  * https://godoc.org/github.com/prometheus/client_golang/prometheus#Collector
  */
 
-func NewCPUsCollector() *CPUsCollector {
+func NewCPUsCollector(isTest bool) *CPUsCollector {
 	return &CPUsCollector{
-		alloc: prometheus.NewDesc("slurm_cpus_alloc", "Allocated CPUs", nil, nil),
-		idle:  prometheus.NewDesc("slurm_cpus_idle", "Idle CPUs", nil, nil),
-		other: prometheus.NewDesc("slurm_cpus_other", "Mix CPUs", nil, nil),
-		total: prometheus.NewDesc("slurm_cpus_total", "Total CPUs", nil, nil),
+		isTest: isTest,
+		alloc:  prometheus.NewDesc("slurm_cpus_alloc", "Allocated CPUs", nil, nil),
+		idle:   prometheus.NewDesc("slurm_cpus_idle", "Idle CPUs", nil, nil),
+		other:  prometheus.NewDesc("slurm_cpus_other", "Mix CPUs", nil, nil),
+		total:  prometheus.NewDesc("slurm_cpus_total", "Total CPUs", nil, nil),
 	}
 }
 
 type CPUsCollector struct {
-	alloc *prometheus.Desc
-	idle  *prometheus.Desc
-	other *prometheus.Desc
-	total *prometheus.Desc
+	isTest bool
+	alloc  *prometheus.Desc
+	idle   *prometheus.Desc
+	other  *prometheus.Desc
+	total  *prometheus.Desc
 }
 
 // Send all metric descriptions
@@ -72,7 +79,7 @@ func (cc *CPUsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- cc.total
 }
 func (cc *CPUsCollector) Collect(ch chan<- prometheus.Metric) {
-	cm := CPUsGetMetrics()
+	cm := cc.CPUsGetMetrics()
 	ch <- prometheus.MustNewConstMetric(cc.alloc, prometheus.GaugeValue, cm.alloc)
 	ch <- prometheus.MustNewConstMetric(cc.idle, prometheus.GaugeValue, cm.idle)
 	ch <- prometheus.MustNewConstMetric(cc.other, prometheus.GaugeValue, cm.other)

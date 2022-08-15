@@ -23,6 +23,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	NodeMetricCommand   = "sinfo -h -N -O NodeList,AllocMem,Memory,CPUsState,StateLong"
+	NodeMetricsTestData = "./test_data/sinfo_mem.txt"
+)
+
 // NodeMetrics stores metrics for each node
 type NodeMetrics struct {
 	memAlloc   uint64
@@ -36,9 +41,9 @@ type NodeMetrics struct {
 
 // NodeGetMetrics takes the output of sinfo with node data
 // It returns a map of metrics per node
-func NodeGetMetrics() map[string]*NodeMetrics {
-	out := execCommand("sinfo -h -N -O NodeList,AllocMem,Memory,CPUsState,StateLong")
+func (nc *NodeCollector) NodeGetMetrics() map[string]*NodeMetrics {
 	nodes := make(map[string]*NodeMetrics)
+	out := getData(nc.isTest, NodeMetricCommand, NodeMetricsTestData)
 	lines := strings.Split(out, "\n")
 
 	// Sort and remove all the duplicates from the 'sinfo' output
@@ -74,6 +79,7 @@ func NodeGetMetrics() map[string]*NodeMetrics {
 }
 
 type NodeCollector struct {
+	isTest   bool
 	cpuAlloc *prometheus.Desc
 	cpuIdle  *prometheus.Desc
 	cpuOther *prometheus.Desc
@@ -84,10 +90,11 @@ type NodeCollector struct {
 
 // NewNodeCollector creates a Prometheus collector to keep all our stats in
 // It returns a set of collections for consumption
-func NewNodeCollector() *NodeCollector {
+func NewNodeCollector(isTest bool) *NodeCollector {
 	labels := []string{"node", "status"}
 
 	return &NodeCollector{
+		isTest:   isTest,
 		cpuAlloc: prometheus.NewDesc("slurm_node_cpu_alloc", "Allocated CPUs per node", labels, nil),
 		cpuIdle:  prometheus.NewDesc("slurm_node_cpu_idle", "Idle CPUs per node", labels, nil),
 		cpuOther: prometheus.NewDesc("slurm_node_cpu_other", "Other CPUs per node", labels, nil),
@@ -108,7 +115,7 @@ func (nc *NodeCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (nc *NodeCollector) Collect(ch chan<- prometheus.Metric) {
-	nodes := NodeGetMetrics()
+	nodes := nc.NodeGetMetrics()
 	for node := range nodes {
 		ch <- prometheus.MustNewConstMetric(nc.cpuAlloc, prometheus.GaugeValue, float64(nodes[node].cpuAlloc), node, nodes[node].nodeStatus)
 		ch <- prometheus.MustNewConstMetric(nc.cpuIdle, prometheus.GaugeValue, float64(nodes[node].cpuIdle), node, nodes[node].nodeStatus)
