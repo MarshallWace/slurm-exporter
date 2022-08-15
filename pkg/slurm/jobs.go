@@ -12,11 +12,15 @@ const (
 	showJobsCommand       = "squeue -a --json"
 	showJobsTestDataInput = "./test_data/jobs.json"
 	showJobsTestDataProm  = "./test_data/jobs.prom"
+
+	minHistogramBucketRange  = 1              // 1 second
+	maxHistogramBucketRange  = 3600 * 24 * 14 //14 days
+	numberOfHistogramBuckets = 15
 )
 
 var (
 	jobLabels       = []string{"name", "job_id", "job_state", "state_reason", "partition", "user", "node"}
-	durationBuckets = prometheus.ExponentialBucketsRange(1, 3600*24*14, 15)
+	durationBuckets = prometheus.ExponentialBucketsRange(minHistogramBucketRange, maxHistogramBucketRange, numberOfHistogramBuckets)
 )
 
 type jobsCollector struct {

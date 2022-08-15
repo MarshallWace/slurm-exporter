@@ -1,10 +1,12 @@
 package slurm
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -12,11 +14,19 @@ import (
 var (
 	ExporterErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Subsystem: "error",
+			Subsystem: "",
 			Name:      "slurm_exporter_errors_total",
 			Help:      "Total number of Errors from the exporter.",
 		},
 		[]string{"command", "reason"})
+	ExecDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Subsystem: "",
+			Name:      "slurm_exporter_exec_duration",
+			Help:      "Duration of exec commands.",
+		},
+		[]string{"command"})
+	execTimeoutSeconds = 10
 )
 
 func getData(isTest bool, command, file string) string {
@@ -28,8 +38,12 @@ func getData(isTest bool, command, file string) string {
 
 func execCommand(command string) string {
 	cmdList := strings.Split(command, " ")
-	// TODO: add command context with automatic timeout
-	out, err := exec.Command(cmdList[0], cmdList[1:]...).CombinedOutput()
+	before := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(execTimeoutSeconds)*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, cmdList[0], cmdList[1:]...).Output()
+	elapsed := time.Since(before)
+	ExecDuration.WithLabelValues(command).Observe(elapsed.Seconds())
 	if err != nil {
 		ExporterErrors.WithLabelValues(command, err.Error()).Inc()
 		return ""
@@ -46,8 +60,9 @@ func readFile(filePath string) string {
 	return string(rawData)
 }
 
-func NewRegistry(gpuCollectorEnabled bool) (*prometheus.Registry, error) {
+func NewRegistry(gpuCollectorEnabled bool, exectimeout int) (*prometheus.Registry, error) {
 	reg := prometheus.NewRegistry()
+	execTimeoutSeconds = exectimeout
 	err := reg.Register(NewAccountsCollector()) // from accounts.go
 	if err != nil {
 		return nil, err
@@ -85,6 +100,10 @@ func NewRegistry(gpuCollectorEnabled bool) (*prometheus.Registry, error) {
 		return nil, err
 	}
 	err = reg.Register(ExporterErrors) // from this file
+	if err != nil {
+		return nil, err
+	}
+	err = reg.Register(ExecDuration) // from this file
 	if err != nil {
 		return nil, err
 	}
