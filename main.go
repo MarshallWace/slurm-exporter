@@ -37,13 +37,18 @@ var gpuAcct = flag.Bool(
 	false,
 	"Enable GPUs accounting")
 
+var execTimeoutSeconds = flag.Int(
+	"exec-timeout",
+	10,
+	"Timeout when executing shell commands")
+
 func main() {
 	flag.Parse()
 
 	if *gpuAcct {
 		prometheus.MustRegister(slurm.NewGPUsCollector()) // from gpus.go
 	}
-	reg, err := slurm.NewRegistry(*gpuAcct)
+	reg, err := slurm.NewRegistry(*gpuAcct, *execTimeoutSeconds)
 	if err != nil {
 		log.Fatalln(err)
 	}
