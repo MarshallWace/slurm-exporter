@@ -111,11 +111,7 @@ func NewRegistry(gpuCollectorEnabled bool, exectimeout int) (*prometheus.Registr
 	if err != nil {
 		return nil, err
 	}
-<<<<<<< Updated upstream
 	err = reg.Register(NewJobsCollector(false)) // from jobs.go
-=======
-	err = reg.Register(NewJobsCollector(false)) // from scontrol.go
->>>>>>> Stashed changes
 	if err != nil {
 		return nil, err
 	}
