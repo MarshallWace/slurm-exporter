@@ -4,7 +4,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 )
@@ -19,12 +18,12 @@ func TestJobsMetrics(t *testing.T) {
 }
 
 // TestGenerateJobsMetrics is only used to getnerate the .prom file for
-func TestGenerateScontrolNodeMetrics(t *testing.T) {
-	reg := prometheus.NewRegistry()
-	collector := NewJobsCollector(true)
-	err := reg.Register(collector)
-	assert.NoError(t, err)
-	gatherers := prometheus.Gatherers{reg}
-	err = prometheus.WriteToTextfile(showJobsTestDataProm, gatherers)
-	assert.NoError(t, err)
-}
+// func TestGenerateScontrolNodeMetrics(t *testing.T) {
+// 	reg := prometheus.NewRegistry()
+// 	collector := NewJobsCollector(true)
+// 	err := reg.Register(collector)
+// 	assert.NoError(t, err)
+// 	gatherers := prometheus.Gatherers{reg}
+// 	err = prometheus.WriteToTextfile(showJobsTestDataProm, gatherers)
+// 	assert.NoError(t, err)
+// }
