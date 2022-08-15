@@ -16,12 +16,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 package slurm
 
 import (
-	"io/ioutil"
-	"os/exec"
 	"strconv"
 	"strings"
-
-	"log"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -40,8 +36,7 @@ func GPUsGetMetrics() *GPUsMetrics {
 func ParseAllocatedGPUs() float64 {
 	var num_gpus = 0.0
 
-	args := []string{"-a", "-X", "--format=AllocTRES", "--state=RUNNING", "--noheader", "--parsable2"}
-	output := string(Execute("sacct", args))
+	output := execCommand("sacct -a -X --format=AllocTRES --state=RUNNING --noheader --parsable2")
 	if len(output) > 0 {
 		for _, line := range strings.Split(output, "\n") {
 			if len(line) > 0 {
@@ -62,11 +57,9 @@ func ParseAllocatedGPUs() float64 {
 
 func ParseTotalGPUs() float64 {
 	var num_gpus = 0.0
-
-	args := []string{"-h", "-o \"%n %G\""}
-	output := string(Execute("sinfo", args))
-	if len(output) > 0 {
-		for _, line := range strings.Split(output, "\n") {
+	out := execCommand("sinfo -h -o \"%n %G\"")
+	if len(out) > 0 {
+		for _, line := range strings.Split(out, "\n") {
 			if len(line) > 0 {
 				line = strings.Trim(line, "\"")
 				gres := strings.Fields(line)[1]
@@ -96,23 +89,6 @@ func ParseGPUsMetrics() *GPUsMetrics {
 	gm.total = total_gpus
 	gm.utilization = allocated_gpus / total_gpus
 	return &gm
-}
-
-// Execute the sinfo command and return its output
-func Execute(command string, arguments []string) []byte {
-	cmd := exec.Command(command, arguments...)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := cmd.Start(); err != nil {
-		log.Fatal(err)
-	}
-	out, _ := ioutil.ReadAll(stdout)
-	if err := cmd.Wait(); err != nil {
-		log.Fatal(err)
-	}
-	return out
 }
 
 /*

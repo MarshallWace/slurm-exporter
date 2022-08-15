@@ -16,30 +16,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 package slurm
 
 import (
-	"io/ioutil"
-	"log"
-	"os/exec"
 	"strconv"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
-
-func FairShareData() []byte {
-	cmd := exec.Command("sshare", "-n", "-P", "-o", "account,fairshare")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := cmd.Start(); err != nil {
-		log.Fatal(err)
-	}
-	out, _ := ioutil.ReadAll(stdout)
-	if err := cmd.Wait(); err != nil {
-		log.Fatal(err)
-	}
-	return out
-}
 
 type FairShareMetrics struct {
 	fairshare float64
@@ -47,7 +28,8 @@ type FairShareMetrics struct {
 
 func ParseFairShareMetrics() map[string]*FairShareMetrics {
 	accounts := make(map[string]*FairShareMetrics)
-	lines := strings.Split(string(FairShareData()), "\n")
+	out := execCommand("sshare -n -P -o account,fairshare")
+	lines := strings.Split(out, "\n")
 	for _, line := range lines {
 		if !strings.HasPrefix(line, "  ") {
 			if strings.Contains(line, "|") {

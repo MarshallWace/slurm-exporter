@@ -16,9 +16,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 package slurm
 
 import (
-	"io/ioutil"
-	"log"
-	"os/exec"
 	"regexp"
 	"sort"
 	"strconv"
@@ -41,10 +38,6 @@ type NodesMetrics struct {
 	resv     float64
 }
 
-func NodesGetMetrics() *NodesMetrics {
-	return ParseNodesMetrics(NodesData())
-}
-
 func RemoveDuplicates(s []string) []string {
 	m := map[string]bool{}
 	t := []string{}
@@ -62,9 +55,10 @@ func RemoveDuplicates(s []string) []string {
 	return t
 }
 
-func ParseNodesMetrics(input []byte) *NodesMetrics {
+func NodesGetMetrics() *NodesMetrics {
 	var nm NodesMetrics
-	lines := strings.Split(string(input), "\n")
+	out := execCommand("sinfo -h -o %D,%T")
+	lines := strings.Split(out, "\n")
 
 	// Sort and remove all the duplicates from the 'sinfo' output
 	sort.Strings(lines)
@@ -113,23 +107,6 @@ func ParseNodesMetrics(input []byte) *NodesMetrics {
 		}
 	}
 	return &nm
-}
-
-// Execute the sinfo command and return its output
-func NodesData() []byte {
-	cmd := exec.Command("sinfo", "-h", "-o %D,%T")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := cmd.Start(); err != nil {
-		log.Fatal(err)
-	}
-	out, _ := ioutil.ReadAll(stdout)
-	if err := cmd.Wait(); err != nil {
-		log.Fatal(err)
-	}
-	return out
 }
 
 /*

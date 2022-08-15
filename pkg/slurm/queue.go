@@ -16,9 +16,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 package slurm
 
 import (
-	"io/ioutil"
-	"log"
-	"os/exec"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -40,14 +37,10 @@ type QueueMetrics struct {
 	out_of_memory float64
 }
 
-// Returns the scheduler metrics
 func QueueGetMetrics() *QueueMetrics {
-	return ParseQueueMetrics(QueueData())
-}
-
-func ParseQueueMetrics(input []byte) *QueueMetrics {
 	var qm QueueMetrics
-	lines := strings.Split(string(input), "\n")
+	out := execCommand("squeue -a -r -h -o %A,%T,%r --states=all")
+	lines := strings.Split(out, "\n")
 	for _, line := range lines {
 		if strings.Contains(line, ",") {
 			splitted := strings.Split(line, ",")
@@ -84,23 +77,6 @@ func ParseQueueMetrics(input []byte) *QueueMetrics {
 		}
 	}
 	return &qm
-}
-
-// Execute the squeue command and return its output
-func QueueData() []byte {
-	cmd := exec.Command("squeue", "-a", "-r", "-h", "-o %A,%T,%r", "--states=all")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := cmd.Start(); err != nil {
-		log.Fatal(err)
-	}
-	out, _ := ioutil.ReadAll(stdout)
-	if err := cmd.Wait(); err != nil {
-		log.Fatal(err)
-	}
-	return out
 }
 
 /*
