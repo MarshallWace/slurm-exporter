@@ -71,14 +71,6 @@ func NewRegistry(gpuCollectorEnabled bool, exectimeout int) (*prometheus.Registr
 	if err != nil {
 		return nil, err
 	}
-	err = reg.Register(NewNodesCollector(false)) // from nodes.go
-	if err != nil {
-		return nil, err
-	}
-	err = reg.Register(NewNodeCollector(false)) // from node.go
-	if err != nil {
-		return nil, err
-	}
 	err = reg.Register(NewPartitionsCollector()) // from partitions.go
 	if err != nil {
 		return nil, err

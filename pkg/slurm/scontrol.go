@@ -26,9 +26,29 @@ type scontrolCollector struct {
 	scontrolNodeGPUTot          *prometheus.GaugeVec
 	scontrolNodeGPUFree         *prometheus.GaugeVec
 	isTest                      bool
+
+	// Old metrics, keeping them for dashboards/alerts compatibility reasons
+	cpuAlloc *prometheus.GaugeVec
+	cpuIdle  *prometheus.GaugeVec
+	cpuOther *prometheus.GaugeVec
+	cpuTotal *prometheus.GaugeVec
+	memAlloc *prometheus.GaugeVec
+	memTotal *prometheus.GaugeVec
+	alloc    *prometheus.GaugeVec
+	comp     *prometheus.GaugeVec
+	down     *prometheus.GaugeVec
+	draining *prometheus.GaugeVec
+	drained  *prometheus.GaugeVec
+	err      *prometheus.GaugeVec
+	fail     *prometheus.GaugeVec
+	idle     *prometheus.GaugeVec
+	maint    *prometheus.GaugeVec
+	mix      *prometheus.GaugeVec
+	resv     *prometheus.GaugeVec
 }
 
 func NewScontrolCollector(isTest bool) *scontrolCollector {
+	labelsOldmetrics := []string{"node", "status"}
 	return &scontrolCollector{
 		isTest: isTest,
 		scontrolNodesInfo: prometheus.NewGaugeVec(
@@ -94,6 +114,111 @@ func NewScontrolCollector(isTest bool) *scontrolCollector {
 				Help:      "Number of free GPU on the node.",
 			},
 			[]string{"name"}),
+
+		// Old metrics, keeping them for dashboards/alerts compatibility reasons
+
+		cpuAlloc: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_node_cpu_alloc",
+				Help: "Allocated CPUs per node",
+			}, labelsOldmetrics,
+		),
+		cpuIdle: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_node_cpu_idle",
+				Help: "Idle CPUs per node",
+			}, labelsOldmetrics,
+		),
+		cpuOther: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_node_cpu_other",
+				Help: "Other CPUs per node",
+			}, labelsOldmetrics,
+		),
+		cpuTotal: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_node_cpu_total",
+				Help: "Total CPUs per node",
+			}, labelsOldmetrics,
+		),
+		memAlloc: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_node_mem_alloc",
+				Help: "Allocated memory per node",
+			}, labelsOldmetrics,
+		),
+		memTotal: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_node_mem_total",
+				Help: "Total memory per node",
+			}, labelsOldmetrics,
+		),
+		alloc: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_alloc",
+				Help: "Allocated nodes",
+			}, []string{},
+		),
+		comp: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_comp",
+				Help: "Completing nodes",
+			}, []string{},
+		),
+		down: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_down",
+				Help: "Down nodes",
+			}, []string{},
+		),
+		draining: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_draining",
+				Help: "Draining nodes",
+			}, []string{},
+		),
+		drained: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_drained",
+				Help: "Draining nodes",
+			}, []string{},
+		),
+		err: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_err",
+				Help: "Error nodes",
+			}, []string{},
+		),
+		fail: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_fail",
+				Help: "Fail nodes",
+			}, []string{},
+		),
+		idle: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_idle",
+				Help: "Idle nodes",
+			}, []string{},
+		),
+		maint: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_maint",
+				Help: "Maint nodes",
+			}, []string{},
+		),
+		mix: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_mix",
+				Help: "Mix nodes",
+			}, []string{},
+		),
+		resv: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_resv",
+				Help: "Reserved nodes",
+			}, []string{},
+		),
 	}
 }
 
@@ -107,16 +232,18 @@ func (s *scontrolCollector) getScontrolMetrics() {
 	}
 	// create metrics from json object
 	for _, n := range nodes.Nodes {
+		// Prepare state and reason variables
+		state := n.State
+		if len(n.StateFlags) > 0 {
+			state = strings.Join(n.StateFlags, "-")
+		}
+		reason := ""
+		if n.Reason != "" {
+			reason = fmt.Sprintf("%s by %s", n.Reason, n.ReasonSetByUser)
+		}
+		// Iterating over partitions and active_features
 		for _, partition := range n.Partitions {
 			for _, feature := range strings.Split(n.ActiveFeatures, ",") {
-				state := n.State
-				if len(n.StateFlags) > 0 {
-					state = strings.Join(n.StateFlags, "-")
-				}
-				reason := ""
-				if n.Reason != "" {
-					reason = fmt.Sprintf("%s by %s", n.Reason, n.ReasonSetByUser)
-				}
 				s.scontrolNodesInfo.WithLabelValues(n.Name, n.Architecture, partition, feature, n.Address, n.SlurmdVersion, n.OperatingSystem, strconv.Itoa(n.Weight), state, reason).Set(1)
 			}
 		}
@@ -139,6 +266,46 @@ func (s *scontrolCollector) getScontrolMetrics() {
 		}
 		s.scontrolNodeGPUTot.WithLabelValues(n.Name).Set(float64(gpuTot))
 		s.scontrolNodeGPUFree.WithLabelValues(n.Name).Set(float64(gpuTot - gpuUsed))
+
+		// Old metrics, keeping them for dashboards/alerts compatibility reasons
+		s.cpuAlloc.WithLabelValues(n.Name, state).Set(float64(n.AllocCpus))
+		s.cpuIdle.WithLabelValues(n.Name, state).Set(float64(n.IdleCpus))
+		s.cpuOther.WithLabelValues(n.Name, state).Set(float64(n.CPUBinding))
+		s.cpuTotal.WithLabelValues(n.Name, state).Set(float64(n.Cpus))
+		s.memAlloc.WithLabelValues(n.Name, state).Set(float64(n.AllocMemory))
+		s.memTotal.WithLabelValues(n.Name, state).Set(float64(n.RealMemory))
+
+		s.aggreagateNodeMetrics(state)
+	}
+}
+
+// aggregateNodeMetrics aggregates metricshttps://slurm.schedmd.com/sinfo.html
+// This aggregation shoudl be done on prometheus level
+// these are deprecated metrics
+func (s *scontrolCollector) aggreagateNodeMetrics(state string) {
+	switch strings.ToUpper(state) {
+	case "ALLOCATED":
+		s.alloc.WithLabelValues().Inc()
+	case "COMPLETING":
+		s.comp.WithLabelValues().Inc()
+	case "DOWN":
+		s.down.WithLabelValues().Inc()
+	case "DRAIN":
+		s.draining.WithLabelValues().Inc()
+	case "DRAINED":
+		s.drained.WithLabelValues().Inc()
+	case "FAILING":
+		s.err.WithLabelValues().Inc()
+	case "FAIL":
+		s.fail.WithLabelValues().Inc()
+	case "IDLE":
+		s.idle.WithLabelValues().Inc()
+	case "MAINT":
+		s.maint.WithLabelValues().Inc()
+	case "MIXED":
+		s.mix.WithLabelValues().Inc()
+	case "RESERVED":
+		s.resv.WithLabelValues().Inc()
 	}
 }
 
@@ -152,6 +319,24 @@ func (s *scontrolCollector) Describe(ch chan<- *prometheus.Desc) {
 	s.scontrolNodeMemoryTot.Describe(ch)
 	s.scontrolNodeGPUTot.Describe(ch)
 	s.scontrolNodeGPUFree.Describe(ch)
+	// Old metrics, keeping them for dashboards/alerts compatibility reasons
+	s.cpuAlloc.Describe(ch)
+	s.cpuIdle.Describe(ch)
+	s.cpuOther.Describe(ch)
+	s.cpuTotal.Describe(ch)
+	s.memAlloc.Describe(ch)
+	s.memTotal.Describe(ch)
+	s.alloc.Describe(ch)
+	s.comp.Describe(ch)
+	s.down.Describe(ch)
+	s.draining.Describe(ch)
+	s.drained.Describe(ch)
+	s.err.Describe(ch)
+	s.fail.Describe(ch)
+	s.idle.Describe(ch)
+	s.maint.Describe(ch)
+	s.mix.Describe(ch)
+	s.resv.Describe(ch)
 }
 
 func (s *scontrolCollector) Collect(ch chan<- prometheus.Metric) {
@@ -164,6 +349,24 @@ func (s *scontrolCollector) Collect(ch chan<- prometheus.Metric) {
 	s.scontrolNodeMemoryTot.Reset()
 	s.scontrolNodeGPUFree.Reset()
 	s.scontrolNodeGPUTot.Reset()
+	// Old metrics, keeping them for dashboards/alerts compatibility reasons
+	s.cpuAlloc.Reset()
+	s.cpuIdle.Reset()
+	s.cpuOther.Reset()
+	s.cpuTotal.Reset()
+	s.memAlloc.Reset()
+	s.memTotal.Reset()
+	s.alloc.Reset()
+	s.comp.Reset()
+	s.down.Reset()
+	s.draining.Reset()
+	s.drained.Reset()
+	s.err.Reset()
+	s.fail.Reset()
+	s.idle.Reset()
+	s.maint.Reset()
+	s.mix.Reset()
+	s.resv.Reset()
 	s.getScontrolMetrics()
 	s.scontrolNodesInfo.Collect(ch)
 	s.scontrolNodeCPUAllocated.Collect(ch)
@@ -174,6 +377,24 @@ func (s *scontrolCollector) Collect(ch chan<- prometheus.Metric) {
 	s.scontrolNodeMemoryTot.Collect(ch)
 	s.scontrolNodeGPUFree.Collect(ch)
 	s.scontrolNodeGPUTot.Collect(ch)
+	// Old metrics, keeping them for dashboards/alerts compatibility reasons
+	s.cpuAlloc.Collect(ch)
+	s.cpuIdle.Collect(ch)
+	s.cpuOther.Collect(ch)
+	s.cpuTotal.Collect(ch)
+	s.memAlloc.Collect(ch)
+	s.memTotal.Collect(ch)
+	s.alloc.Collect(ch)
+	s.comp.Collect(ch)
+	s.down.Collect(ch)
+	s.draining.Collect(ch)
+	s.drained.Collect(ch)
+	s.err.Collect(ch)
+	s.fail.Collect(ch)
+	s.idle.Collect(ch)
+	s.maint.Collect(ch)
+	s.mix.Collect(ch)
+	s.resv.Collect(ch)
 }
 
 type NodeDetails struct {
