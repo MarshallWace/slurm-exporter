@@ -1,6 +1,8 @@
 package slurm
 
 import (
+	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -8,8 +10,8 @@ import (
 )
 
 const (
-	showNodesDetailsCommand       = "scontrol show -o node"
-	showNodesDetailsTestDataInput = "./test_data/scontrol_nodes.txt"
+	showNodesDetailsCommand       = "sinfo -R --json"
+	showNodesDetailsTestDataInput = "./test_data/sinfo-reason-nodes.json"
 	showNodesDetailsTestDataProm  = "./test_data/scontrol_nodes.prom"
 )
 
@@ -21,6 +23,8 @@ type scontrolCollector struct {
 	scontrolNodeMemoryTot       *prometheus.GaugeVec
 	scontrolNodeMemoryAllocated *prometheus.GaugeVec
 	scontrolNodeMemoryFree      *prometheus.GaugeVec
+	scontrolNodeGPUTot          *prometheus.GaugeVec
+	scontrolNodeGPUFree         *prometheus.GaugeVec
 	isTest                      bool
 }
 
@@ -33,7 +37,7 @@ func NewScontrolCollector(isTest bool) *scontrolCollector {
 				Name:      "slurm_node_info",
 				Help:      "Informations about nodes.",
 			},
-			[]string{"name", "arch", "partition", "feature", "address", "version", "os", "state", "weight"}),
+			[]string{"name", "arch", "partition", "feature", "address", "version", "os", "weight", "state", "reason"}),
 		scontrolNodeCPULoad: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Subsystem: "",
@@ -76,32 +80,65 @@ func NewScontrolCollector(isTest bool) *scontrolCollector {
 				Help:      "Free memory per node as reported by slurm CLI.",
 			},
 			[]string{"name"}),
+		scontrolNodeGPUTot: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Subsystem: "",
+				Name:      "slurm_node_gpu_tot",
+				Help:      "Number of total GPU on the node.",
+			},
+			[]string{"name"}),
+		scontrolNodeGPUFree: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Subsystem: "",
+				Name:      "slurm_node_gpu_free",
+				Help:      "Number of free GPU on the node.",
+			},
+			[]string{"name"}),
 	}
 }
 
 func (s *scontrolCollector) getScontrolMetrics() {
+	nodes := &NodeDetails{}
 	data := getData(s.isTest, showNodesDetailsCommand, showNodesDetailsTestDataInput)
-	lines := strings.Split(data, "\n")
-	nodes := []NodeDetails{}
-	for _, v := range lines {
-		if v == "" {
-			continue
-		}
-		nodes = append(nodes, *parseLine(v))
+	err := json.Unmarshal([]byte(data), nodes)
+	if err != nil {
+		ExporterErrors.WithLabelValues("json-encoding-sinfo-nodes", err.Error()).Inc()
+		fmt.Println(err)
 	}
-	for _, n := range nodes {
+	// create metrics from json object
+	for _, n := range nodes.Nodes {
 		for _, partition := range n.Partitions {
-			for _, feature := range n.ActiveFeatures {
-				s.scontrolNodesInfo.WithLabelValues(n.NodeName, n.Arch, partition, feature, n.NodeAddr, n.Version, n.OS, n.State, n.Weight).Set(1)
+			for _, feature := range strings.Split(n.ActiveFeatures, ",") {
+				state := n.State
+				if len(n.StateFlags) > 0 {
+					state = strings.Join(n.StateFlags, "-")
+				}
+				reason := ""
+				if n.Reason != "" {
+					reason = fmt.Sprintf("%s by %s", n.Reason, n.ReasonSetByUser)
+				}
+				s.scontrolNodesInfo.WithLabelValues(n.Name, n.Architecture, partition, feature, n.Address, n.SlurmdVersion, n.OperatingSystem, strconv.Itoa(n.Weight), state, reason).Set(1)
 			}
 		}
 		// Now populating all other metrics
-		s.scontrolNodeCPUTot.WithLabelValues(n.NodeName).Set(float64(n.CPUTot))
-		s.scontrolNodeCPUAllocated.WithLabelValues(n.NodeName).Set(float64(n.CPUAlloc))
-		s.scontrolNodeCPULoad.WithLabelValues(n.NodeName).Set(float64(n.CPULoad))
-		s.scontrolNodeMemoryTot.WithLabelValues(n.NodeName).Set(float64(n.RealMemory))
-		s.scontrolNodeMemoryFree.WithLabelValues(n.NodeName).Set(float64(n.FreeMem))
-		s.scontrolNodeMemoryAllocated.WithLabelValues(n.NodeName).Set(float64(n.AllocMem))
+		s.scontrolNodeCPUTot.WithLabelValues(n.Name).Set(float64(n.Cpus))
+		s.scontrolNodeCPUAllocated.WithLabelValues(n.Name).Set(float64(n.AllocCpus))
+		s.scontrolNodeCPULoad.WithLabelValues(n.Name).Set(float64(n.CPULoad) / 100)
+		s.scontrolNodeMemoryTot.WithLabelValues(n.Name).Set(float64(n.RealMemory))
+		s.scontrolNodeMemoryFree.WithLabelValues(n.Name).Set(float64(n.FreeMemory))
+		s.scontrolNodeMemoryAllocated.WithLabelValues(n.Name).Set(float64(n.AllocMemory))
+		gpuTot := 0
+		if n.Gres != "" {
+			// this is a bit obscure, but the standard gres configuration is `gpu:nvidia:3` and we need to get the 3
+			gpuTot, _ = strconv.Atoi(strings.Split(n.Gres, ":")[2])
+		}
+		gpuUsed := 0
+		if n.GresUsed != "gpu:0" {
+			// this is a bit obscure, but the standard gres configuration is `gpu:nvidia:0(IDX:N\/A)` and we need to get the 0
+			gpuUsed, _ = strconv.Atoi(strings.Split(strings.Split(n.GresUsed, "(")[0], ":")[2])
+		}
+		s.scontrolNodeGPUTot.WithLabelValues(n.Name).Set(float64(gpuTot))
+		s.scontrolNodeGPUFree.WithLabelValues(n.Name).Set(float64(gpuTot - gpuUsed))
 	}
 }
 
@@ -113,6 +150,8 @@ func (s *scontrolCollector) Describe(ch chan<- *prometheus.Desc) {
 	s.scontrolNodeMemoryAllocated.Describe(ch)
 	s.scontrolNodeMemoryFree.Describe(ch)
 	s.scontrolNodeMemoryTot.Describe(ch)
+	s.scontrolNodeGPUTot.Describe(ch)
+	s.scontrolNodeGPUFree.Describe(ch)
 }
 
 func (s *scontrolCollector) Collect(ch chan<- prometheus.Metric) {
@@ -123,6 +162,8 @@ func (s *scontrolCollector) Collect(ch chan<- prometheus.Metric) {
 	s.scontrolNodeMemoryAllocated.Reset()
 	s.scontrolNodeMemoryFree.Reset()
 	s.scontrolNodeMemoryTot.Reset()
+	s.scontrolNodeGPUFree.Reset()
+	s.scontrolNodeGPUTot.Reset()
 	s.getScontrolMetrics()
 	s.scontrolNodesInfo.Collect(ch)
 	s.scontrolNodeCPUAllocated.Collect(ch)
@@ -131,120 +172,71 @@ func (s *scontrolCollector) Collect(ch chan<- prometheus.Metric) {
 	s.scontrolNodeMemoryAllocated.Collect(ch)
 	s.scontrolNodeMemoryFree.Collect(ch)
 	s.scontrolNodeMemoryTot.Collect(ch)
-}
-
-func parseLine(node string) *NodeDetails {
-	nodedet := &NodeDetails{}
-
-	details := strings.Split(node, " ")
-	for _, detail := range details {
-		parts := strings.SplitN(detail, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		if parts[1] == "" {
-			continue
-		}
-		switch parts[0] {
-		case "NodeName":
-			nodedet.NodeName = parts[1]
-		case "Arch":
-			nodedet.Arch = parts[1]
-		case "CoresPerSocket":
-			nodedet.CoresPerSocket = toUint(parts[1])
-		case "CPUAlloc":
-			nodedet.CPUAlloc = toUint(parts[1])
-		case "CPUTot":
-			nodedet.CPUTot = toUint(parts[1])
-		case "CPULoad":
-			load, _ := strconv.ParseFloat(parts[1], 32)
-			nodedet.CPULoad = float32(load)
-		case "AvailableFeatures":
-			features := toMap(parts[1], ":")
-			nodedet.AvailableFeatures = features
-		case "ActiveFeatures":
-			features := toMap(parts[1], ":")
-			nodedet.ActiveFeatures = features
-		case "NodeAddr":
-			nodedet.NodeAddr = parts[1]
-		case "NodeHostName":
-			nodedet.NodeHostName = parts[1]
-		case "Version":
-			nodedet.Version = parts[1]
-		case "OS":
-			nodedet.OS = parts[1]
-		case "RealMemory":
-			nodedet.RealMemory = toUint(parts[1])
-		case "AllocMem":
-			nodedet.AllocMem = toUint(parts[1])
-		case "FreeMem":
-			nodedet.FreeMem = toUint(parts[1])
-		case "Sockets":
-			nodedet.Sockets = toUint(parts[1])
-		case "Boards":
-			nodedet.Boards = toUint(parts[1])
-		case "State":
-			nodedet.State = parts[1]
-		case "ThreadsPerCore":
-			nodedet.ThreadsPerCore = toUint(parts[1])
-		case "Weight":
-			nodedet.Weight = parts[1]
-		case "Partitions":
-			nodedet.Partitions = strings.Split(parts[1], ",")
-		case "CfgTRES":
-			tres := toMap(parts[1], "=")
-			nodedet.CfgTRES = tres
-		case "AllocTRES":
-			tres := toMap(parts[1], "=")
-			nodedet.AllocTRES = tres
-		default:
-			continue
-		}
-	}
-
-	return nodedet
-}
-
-func toUint(s string) uint {
-	d, err := strconv.ParseUint(s, 10, 64)
-	if err != nil {
-		ExporterErrors.WithLabelValues("convert-string-uint", err.Error()).Inc()
-	}
-	return uint(d)
-}
-
-func toMap(s string, sep string) map[string]string {
-	allFeat := strings.Split(s, ",")
-	features := map[string]string{}
-	for _, feature := range allFeat {
-		featurePart := strings.SplitN(feature, sep, 2)
-		features[featurePart[0]] = featurePart[1]
-	}
-	return features
+	s.scontrolNodeGPUFree.Collect(ch)
+	s.scontrolNodeGPUTot.Collect(ch)
 }
 
 type NodeDetails struct {
-	NodeName          string
-	Arch              string
-	CoresPerSocket    uint
-	CPUAlloc          uint
-	CPUTot            uint
-	CPULoad           float32
-	AvailableFeatures map[string]string
-	ActiveFeatures    map[string]string
-	NodeAddr          string
-	NodeHostName      string
-	Version           string
-	OS                string
-	RealMemory        uint
-	AllocMem          uint
-	FreeMem           uint
-	Sockets           uint
-	Boards            uint
-	State             string
-	ThreadsPerCore    uint
-	Weight            string
-	Partitions        []string
-	CfgTRES           map[string]string
-	AllocTRES         map[string]string
+	Meta struct {
+		Plugin struct {
+			Type string `json:"type"`
+			Name string `json:"name"`
+		} `json:"plugin"`
+		Slurm struct {
+			Version struct {
+				Major int `json:"major"`
+				Micro int `json:"micro"`
+				Minor int `json:"minor"`
+			} `json:"version"`
+			Release string `json:"release"`
+		} `json:"Slurm"`
+	} `json:"meta"`
+	Errors []interface{} `json:"errors"`
+	Nodes  []struct {
+		Architecture              string      `json:"architecture"`
+		BurstbufferNetworkAddress string      `json:"burstbuffer_network_address"`
+		Boards                    int         `json:"boards"`
+		BootTime                  int         `json:"boot_time"`
+		Comment                   string      `json:"comment"`
+		Cores                     int         `json:"cores"`
+		CPUBinding                int         `json:"cpu_binding"`
+		CPULoad                   int         `json:"cpu_load"`
+		Extra                     string      `json:"extra"`
+		FreeMemory                int         `json:"free_memory"`
+		Cpus                      int         `json:"cpus"`
+		LastBusy                  int         `json:"last_busy"`
+		Features                  string      `json:"features"`
+		ActiveFeatures            string      `json:"active_features"`
+		Gres                      string      `json:"gres"`
+		GresDrained               string      `json:"gres_drained"`
+		GresUsed                  string      `json:"gres_used"`
+		McsLabel                  string      `json:"mcs_label"`
+		Name                      string      `json:"name"`
+		NextStateAfterReboot      string      `json:"next_state_after_reboot"`
+		Address                   string      `json:"address"`
+		Hostname                  string      `json:"hostname"`
+		State                     string      `json:"state"`
+		StateFlags                []string    `json:"state_flags"`
+		NextStateAfterRebootFlags []string    `json:"next_state_after_reboot_flags"`
+		OperatingSystem           string      `json:"operating_system"`
+		Owner                     interface{} `json:"owner"`
+		Partitions                []string    `json:"partitions"`
+		Port                      int         `json:"port"`
+		RealMemory                int         `json:"real_memory"`
+		Reason                    string      `json:"reason"`
+		ReasonChangedAt           int         `json:"reason_changed_at"`
+		ReasonSetByUser           interface{} `json:"reason_set_by_user"`
+		SlurmdStartTime           int         `json:"slurmd_start_time"`
+		Sockets                   int         `json:"sockets"`
+		Threads                   int         `json:"threads"`
+		TemporaryDisk             int         `json:"temporary_disk"`
+		Weight                    int         `json:"weight"`
+		Tres                      string      `json:"tres"`
+		SlurmdVersion             string      `json:"slurmd_version"`
+		AllocMemory               int         `json:"alloc_memory"`
+		AllocCpus                 int         `json:"alloc_cpus"`
+		IdleCpus                  int         `json:"idle_cpus"`
+		TresUsed                  string      `json:"tres_used"`
+		TresWeighted              float64     `json:"tres_weighted"`
+	} `json:"nodes"`
 }
