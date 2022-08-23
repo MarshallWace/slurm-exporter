@@ -257,12 +257,16 @@ func (s *nodesCollector) getNodesMetrics() {
 		gpuTot := 0
 		if n.Gres != "" {
 			// this is a bit obscure, but the standard gres configuration is `gpu:nvidia:3` and we need to get the 3
-			gpuTot, _ = strconv.Atoi(strings.Split(n.Gres, ":")[2])
+			gpuTot, err = strconv.Atoi(strings.Split(n.Gres, ":")[2])
+			ExporterErrors.WithLabelValues("atoi-gpu-tot", err.Error()).Inc()
+			fmt.Println(err)
 		}
 		gpuUsed := 0
 		if n.GresUsed != "gpu:0" {
 			// this is a bit obscure, but the standard gres configuration is `gpu:nvidia:0(IDX:N\/A)` and we need to get the 0
-			gpuUsed, _ = strconv.Atoi(strings.Split(strings.Split(n.GresUsed, "(")[0], ":")[2])
+			gpuUsed, err = strconv.Atoi(strings.Split(strings.Split(n.GresUsed, "(")[0], ":")[2])
+			ExporterErrors.WithLabelValues("atoi-gpu-used", err.Error()).Inc()
+			fmt.Println(err)
 		}
 		s.scontrolNodeGPUTot.WithLabelValues(n.Name).Set(float64(gpuTot))
 		s.scontrolNodeGPUFree.WithLabelValues(n.Name).Set(float64(gpuTot - gpuUsed))
@@ -275,14 +279,14 @@ func (s *nodesCollector) getNodesMetrics() {
 		s.memAlloc.WithLabelValues(n.Name, state).Set(float64(n.AllocMemory))
 		s.memTotal.WithLabelValues(n.Name, state).Set(float64(n.RealMemory))
 
-		s.aggreagateNodeMetrics(state)
+		s.aggregateNodeMetrics(state)
 	}
 }
 
 // aggregateNodeMetrics aggregates metricshttps://slurm.schedmd.com/sinfo.html
 // This aggregation shoudl be done on prometheus level
 // these are deprecated metrics
-func (s *nodesCollector) aggreagateNodeMetrics(state string) {
+func (s *nodesCollector) aggregateNodeMetrics(state string) {
 	switch strings.ToUpper(state) {
 	case "ALLOCATED":
 		s.alloc.WithLabelValues().Inc()
