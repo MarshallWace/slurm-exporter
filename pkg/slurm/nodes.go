@@ -11,11 +11,11 @@ import (
 
 const (
 	showNodesDetailsCommand       = "sinfo -R --json"
-	showNodesDetailsTestDataInput = "./test_data/sinfo-reason-nodes.json"
-	showNodesDetailsTestDataProm  = "./test_data/scontrol_nodes.prom"
+	showNodesDetailsTestDataInput = "./test_data/sinfo-nodes.json"
+	showNodesDetailsTestDataProm  = "./test_data/sinfo-nodes.prom"
 )
 
-type scontrolCollector struct {
+type nodesCollector struct {
 	scontrolNodesInfo           *prometheus.GaugeVec
 	scontrolNodeCPULoad         *prometheus.GaugeVec
 	scontrolNodeCPUTot          *prometheus.GaugeVec
@@ -47,9 +47,9 @@ type scontrolCollector struct {
 	resv     *prometheus.GaugeVec
 }
 
-func NewScontrolCollector(isTest bool) *scontrolCollector {
+func NewNodesCollector(isTest bool) *nodesCollector {
 	labelsOldmetrics := []string{"node", "status"}
-	return &scontrolCollector{
+	return &nodesCollector{
 		isTest: isTest,
 		scontrolNodesInfo: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
@@ -222,7 +222,7 @@ func NewScontrolCollector(isTest bool) *scontrolCollector {
 	}
 }
 
-func (s *scontrolCollector) getScontrolMetrics() {
+func (s *nodesCollector) getNodesMetrics() {
 	nodes := &NodeDetails{}
 	data := getData(s.isTest, showNodesDetailsCommand, showNodesDetailsTestDataInput)
 	err := json.Unmarshal([]byte(data), nodes)
@@ -282,7 +282,7 @@ func (s *scontrolCollector) getScontrolMetrics() {
 // aggregateNodeMetrics aggregates metricshttps://slurm.schedmd.com/sinfo.html
 // This aggregation shoudl be done on prometheus level
 // these are deprecated metrics
-func (s *scontrolCollector) aggreagateNodeMetrics(state string) {
+func (s *nodesCollector) aggreagateNodeMetrics(state string) {
 	switch strings.ToUpper(state) {
 	case "ALLOCATED":
 		s.alloc.WithLabelValues().Inc()
@@ -309,7 +309,7 @@ func (s *scontrolCollector) aggreagateNodeMetrics(state string) {
 	}
 }
 
-func (s *scontrolCollector) Describe(ch chan<- *prometheus.Desc) {
+func (s *nodesCollector) Describe(ch chan<- *prometheus.Desc) {
 	s.scontrolNodesInfo.Describe(ch)
 	s.scontrolNodeCPUAllocated.Describe(ch)
 	s.scontrolNodeCPULoad.Describe(ch)
@@ -339,7 +339,7 @@ func (s *scontrolCollector) Describe(ch chan<- *prometheus.Desc) {
 	s.resv.Describe(ch)
 }
 
-func (s *scontrolCollector) Collect(ch chan<- prometheus.Metric) {
+func (s *nodesCollector) Collect(ch chan<- prometheus.Metric) {
 	s.scontrolNodesInfo.Reset()
 	s.scontrolNodeCPUAllocated.Reset()
 	s.scontrolNodeCPULoad.Reset()
@@ -367,7 +367,7 @@ func (s *scontrolCollector) Collect(ch chan<- prometheus.Metric) {
 	s.maint.Reset()
 	s.mix.Reset()
 	s.resv.Reset()
-	s.getScontrolMetrics()
+	s.getNodesMetrics()
 	s.scontrolNodesInfo.Collect(ch)
 	s.scontrolNodeCPUAllocated.Collect(ch)
 	s.scontrolNodeCPULoad.Collect(ch)
