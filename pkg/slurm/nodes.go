@@ -258,15 +258,20 @@ func (s *nodesCollector) getNodesMetrics() {
 		if n.Gres != "" {
 			// this is a bit obscure, but the standard gres configuration is `gpu:nvidia:3` and we need to get the 3
 			gpuTot, err = strconv.Atoi(strings.Split(n.Gres, ":")[2])
-			ExporterErrors.WithLabelValues("atoi-gpu-tot", err.Error()).Inc()
-			fmt.Println(err)
+			if err != nil {
+				ExporterErrors.WithLabelValues("atoi-gpu-tot", err.Error()).Inc()
+				fmt.Println(err)
+			}
+
 		}
 		gpuUsed := 0
 		if n.GresUsed != "gpu:0" {
 			// this is a bit obscure, but the standard gres configuration is `gpu:nvidia:0(IDX:N\/A)` and we need to get the 0
 			gpuUsed, err = strconv.Atoi(strings.Split(strings.Split(n.GresUsed, "(")[0], ":")[2])
-			ExporterErrors.WithLabelValues("atoi-gpu-used", err.Error()).Inc()
-			fmt.Println(err)
+			if err != nil {
+				ExporterErrors.WithLabelValues("atoi-gpu-used", err.Error()).Inc()
+				fmt.Println(err)
+			}
 		}
 		s.scontrolNodeGPUTot.WithLabelValues(n.Name).Set(float64(gpuTot))
 		s.scontrolNodeGPUFree.WithLabelValues(n.Name).Set(float64(gpuTot - gpuUsed))
