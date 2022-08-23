@@ -18,7 +18,7 @@ func TestJobsMetrics(t *testing.T) {
 }
 
 // TestGenerateJobsMetrics is only used to getnerate the .prom file for
-// func TestGenerateScontrolNodeMetrics(t *testing.T) {
+// func TestGenerateJobsMetrics(t *testing.T) {
 // 	reg := prometheus.NewRegistry()
 // 	collector := NewJobsCollector(true)
 // 	err := reg.Register(collector)

@@ -1,23 +1,8 @@
-/* Copyright 2017 Victor Penso, Matteo Dessalvi
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>. */
-
 package slurm
 
 import (
-	"regexp"
-	"sort"
+	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -25,158 +10,458 @@ import (
 )
 
 const (
-	nodesCommand  = "sinfo -h -o %D,%T"
-	nodesTestData = "./test_data/sinfo.txt"
+	showNodesDetailsCommand       = "sinfo -R --json"
+	showNodesDetailsTestDataInput = "./test_data/sinfo-nodes.json"
+	showNodesDetailsTestDataProm  = "./test_data/sinfo-nodes.prom"
 )
 
-type NodesMetrics struct {
-	alloc    float64
-	comp     float64
-	down     float64
-	drained  float64
-	draining float64
-	err      float64
-	fail     float64
-	idle     float64
-	maint    float64
-	mix      float64
-	resv     float64
+type nodesCollector struct {
+	scontrolNodesInfo           *prometheus.GaugeVec
+	scontrolNodeCPULoad         *prometheus.GaugeVec
+	scontrolNodeCPUTot          *prometheus.GaugeVec
+	scontrolNodeCPUAllocated    *prometheus.GaugeVec
+	scontrolNodeMemoryTot       *prometheus.GaugeVec
+	scontrolNodeMemoryAllocated *prometheus.GaugeVec
+	scontrolNodeMemoryFree      *prometheus.GaugeVec
+	scontrolNodeGPUTot          *prometheus.GaugeVec
+	scontrolNodeGPUFree         *prometheus.GaugeVec
+	isTest                      bool
+
+	// Old metrics, keeping them for dashboards/alerts compatibility reasons
+	cpuAlloc *prometheus.GaugeVec
+	cpuIdle  *prometheus.GaugeVec
+	cpuOther *prometheus.GaugeVec
+	cpuTotal *prometheus.GaugeVec
+	memAlloc *prometheus.GaugeVec
+	memTotal *prometheus.GaugeVec
+	alloc    *prometheus.GaugeVec
+	comp     *prometheus.GaugeVec
+	down     *prometheus.GaugeVec
+	draining *prometheus.GaugeVec
+	drained  *prometheus.GaugeVec
+	err      *prometheus.GaugeVec
+	fail     *prometheus.GaugeVec
+	idle     *prometheus.GaugeVec
+	maint    *prometheus.GaugeVec
+	mix      *prometheus.GaugeVec
+	resv     *prometheus.GaugeVec
 }
 
-func RemoveDuplicates(s []string) []string {
-	m := map[string]bool{}
-	t := []string{}
+func NewNodesCollector(isTest bool) *nodesCollector {
+	labelsOldmetrics := []string{"node", "status"}
+	return &nodesCollector{
+		isTest: isTest,
+		scontrolNodesInfo: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Subsystem: "",
+				Name:      "slurm_node_info",
+				Help:      "Informations about nodes.",
+			},
+			[]string{"name", "arch", "partition", "feature", "address", "version", "os", "weight", "state", "reason"}),
+		scontrolNodeCPULoad: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Subsystem: "",
+				Name:      "slurm_node_cpu_load",
+				Help:      "CPU Load per node as reported by slurm CLI.",
+			},
+			[]string{"name"}),
+		scontrolNodeCPUTot: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Subsystem: "",
+				Name:      "slurm_node_cpu_tot",
+				Help:      "CPU total available per node as reported by slurm CLI.",
+			},
+			[]string{"name"}),
+		scontrolNodeCPUAllocated: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Subsystem: "",
+				Name:      "slurm_node_cpu_allocated",
+				Help:      "CPU Allocated per node as reported by slurm CLI.",
+			},
+			[]string{"name"}),
+		scontrolNodeMemoryTot: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Subsystem: "",
+				Name:      "slurm_node_memory_total_bytes",
+				Help:      "Total memory per node as reported by slurm CLI.",
+			},
+			[]string{"name"}),
+		scontrolNodeMemoryAllocated: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Subsystem: "",
+				Name:      "slurm_node_memory_allocated_bytes",
+				Help:      "Allocated memory per node as reported by slurm CLI.",
+			},
+			[]string{"name"}),
+		scontrolNodeMemoryFree: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Subsystem: "",
+				Name:      "slurm_node_memory_free_bytes",
+				Help:      "Free memory per node as reported by slurm CLI.",
+			},
+			[]string{"name"}),
+		scontrolNodeGPUTot: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Subsystem: "",
+				Name:      "slurm_node_gpu_tot",
+				Help:      "Number of total GPU on the node.",
+			},
+			[]string{"name"}),
+		scontrolNodeGPUFree: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Subsystem: "",
+				Name:      "slurm_node_gpu_free",
+				Help:      "Number of free GPU on the node.",
+			},
+			[]string{"name"}),
 
-	// Walk through the slice 's' and for each value we haven't seen so far, append it to 't'.
-	for _, v := range s {
-		if _, seen := m[v]; !seen {
-			if len(v) > 0 {
-				t = append(t, v)
-				m[v] = true
+		// Old metrics, keeping them for dashboards/alerts compatibility reasons
+
+		cpuAlloc: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_node_cpu_alloc",
+				Help: "Allocated CPUs per node",
+			}, labelsOldmetrics,
+		),
+		cpuIdle: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_node_cpu_idle",
+				Help: "Idle CPUs per node",
+			}, labelsOldmetrics,
+		),
+		cpuOther: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_node_cpu_other",
+				Help: "Other CPUs per node",
+			}, labelsOldmetrics,
+		),
+		cpuTotal: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_node_cpu_total",
+				Help: "Total CPUs per node",
+			}, labelsOldmetrics,
+		),
+		memAlloc: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_node_mem_alloc",
+				Help: "Allocated memory per node",
+			}, labelsOldmetrics,
+		),
+		memTotal: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_node_mem_total",
+				Help: "Total memory per node",
+			}, labelsOldmetrics,
+		),
+		alloc: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_alloc",
+				Help: "Allocated nodes",
+			}, []string{},
+		),
+		comp: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_comp",
+				Help: "Completing nodes",
+			}, []string{},
+		),
+		down: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_down",
+				Help: "Down nodes",
+			}, []string{},
+		),
+		draining: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_draining",
+				Help: "Draining nodes",
+			}, []string{},
+		),
+		drained: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_drained",
+				Help: "Draining nodes",
+			}, []string{},
+		),
+		err: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_err",
+				Help: "Error nodes",
+			}, []string{},
+		),
+		fail: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_fail",
+				Help: "Fail nodes",
+			}, []string{},
+		),
+		idle: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_idle",
+				Help: "Idle nodes",
+			}, []string{},
+		),
+		maint: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_maint",
+				Help: "Maint nodes",
+			}, []string{},
+		),
+		mix: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_mix",
+				Help: "Mix nodes",
+			}, []string{},
+		),
+		resv: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "slurm_nodes_resv",
+				Help: "Reserved nodes",
+			}, []string{},
+		),
+	}
+}
+
+func (s *nodesCollector) getNodesMetrics() {
+	nodes := &NodeDetails{}
+	data := getData(s.isTest, showNodesDetailsCommand, showNodesDetailsTestDataInput)
+	err := json.Unmarshal([]byte(data), nodes)
+	if err != nil {
+		ExporterErrors.WithLabelValues("json-encoding-sinfo-nodes", err.Error()).Inc()
+		fmt.Println(err)
+	}
+	// create metrics from json object
+	for _, n := range nodes.Nodes {
+		// Prepare state and reason variables
+		state := n.State
+		if len(n.StateFlags) > 0 {
+			state = strings.Join(n.StateFlags, "-")
+		}
+		reason := ""
+		if n.Reason != "" {
+			reason = fmt.Sprintf("%s by %s", n.Reason, n.ReasonSetByUser)
+		}
+		// Iterating over partitions and active_features
+		for _, partition := range n.Partitions {
+			for _, feature := range strings.Split(n.ActiveFeatures, ",") {
+				s.scontrolNodesInfo.WithLabelValues(n.Name, n.Architecture, partition, feature, n.Address, n.SlurmdVersion, n.OperatingSystem, strconv.Itoa(n.Weight), state, reason).Set(1)
 			}
 		}
-	}
-
-	return t
-}
-
-func (nc *NodesCollector) GetNodesMetrics() *NodesMetrics {
-	var nm NodesMetrics
-	out := getData(nc.isTest, nodesCommand, nodesTestData)
-	lines := strings.Split(out, "\n")
-
-	// Sort and remove all the duplicates from the 'sinfo' output
-	sort.Strings(lines)
-	lines_uniq := RemoveDuplicates(lines)
-
-	for _, line := range lines_uniq {
-		if strings.Contains(line, ",") {
-			split := strings.Split(line, ",")
-			count, _ := strconv.ParseFloat(strings.TrimSpace(split[0]), 64)
-			state := split[1]
-			alloc := regexp.MustCompile(`^alloc`)
-			comp := regexp.MustCompile(`^comp`)
-			down := regexp.MustCompile(`^down`)
-			draining := regexp.MustCompile(`^draining`)
-			drained := regexp.MustCompile(`^drained`)
-			fail := regexp.MustCompile(`^fail`)
-			err := regexp.MustCompile(`^err`)
-			idle := regexp.MustCompile(`^idle`)
-			maint := regexp.MustCompile(`^maint`)
-			mix := regexp.MustCompile(`^mix`)
-			resv := regexp.MustCompile(`^res`)
-			switch {
-			case alloc.MatchString(state) == true:
-				nm.alloc += count
-			case comp.MatchString(state) == true:
-				nm.comp += count
-			case down.MatchString(state) == true:
-				nm.down += count
-			case draining.MatchString(state) == true:
-				nm.draining += count
-			case drained.MatchString(state) == true:
-				nm.drained += count
-			case fail.MatchString(state) == true:
-				nm.fail += count
-			case err.MatchString(state) == true:
-				nm.err += count
-			case idle.MatchString(state) == true:
-				nm.idle += count
-			case maint.MatchString(state) == true:
-				nm.maint += count
-			case mix.MatchString(state) == true:
-				nm.mix += count
-			case resv.MatchString(state) == true:
-				nm.resv += count
-			}
+		// Now populating all other metrics
+		s.scontrolNodeCPUTot.WithLabelValues(n.Name).Set(float64(n.Cpus))
+		s.scontrolNodeCPUAllocated.WithLabelValues(n.Name).Set(float64(n.AllocCpus))
+		s.scontrolNodeCPULoad.WithLabelValues(n.Name).Set(float64(n.CPULoad) / 100)
+		s.scontrolNodeMemoryTot.WithLabelValues(n.Name).Set(float64(n.RealMemory))
+		s.scontrolNodeMemoryFree.WithLabelValues(n.Name).Set(float64(n.FreeMemory))
+		s.scontrolNodeMemoryAllocated.WithLabelValues(n.Name).Set(float64(n.AllocMemory))
+		gpuTot := 0
+		if n.Gres != "" {
+			// this is a bit obscure, but the standard gres configuration is `gpu:nvidia:3` and we need to get the 3
+			gpuTot, err = strconv.Atoi(strings.Split(n.Gres, ":")[2])
+			ExporterErrors.WithLabelValues("atoi-gpu-tot", err.Error()).Inc()
+			fmt.Println(err)
 		}
-	}
-	return &nm
-}
+		gpuUsed := 0
+		if n.GresUsed != "gpu:0" {
+			// this is a bit obscure, but the standard gres configuration is `gpu:nvidia:0(IDX:N\/A)` and we need to get the 0
+			gpuUsed, err = strconv.Atoi(strings.Split(strings.Split(n.GresUsed, "(")[0], ":")[2])
+			ExporterErrors.WithLabelValues("atoi-gpu-used", err.Error()).Inc()
+			fmt.Println(err)
+		}
+		s.scontrolNodeGPUTot.WithLabelValues(n.Name).Set(float64(gpuTot))
+		s.scontrolNodeGPUFree.WithLabelValues(n.Name).Set(float64(gpuTot - gpuUsed))
 
-/*
- * Implement the Prometheus Collector interface and feed the
- * Slurm scheduler metrics into it.
- * https://godoc.org/github.com/prometheus/client_golang/prometheus#Collector
- */
+		// Old metrics, keeping them for dashboards/alerts compatibility reasons
+		s.cpuAlloc.WithLabelValues(n.Name, state).Set(float64(n.AllocCpus))
+		s.cpuIdle.WithLabelValues(n.Name, state).Set(float64(n.IdleCpus))
+		s.cpuOther.WithLabelValues(n.Name, state).Set(float64(n.CPUBinding))
+		s.cpuTotal.WithLabelValues(n.Name, state).Set(float64(n.Cpus))
+		s.memAlloc.WithLabelValues(n.Name, state).Set(float64(n.AllocMemory))
+		s.memTotal.WithLabelValues(n.Name, state).Set(float64(n.RealMemory))
 
-func NewNodesCollector(isTest bool) *NodesCollector {
-	return &NodesCollector{
-		isTest:   isTest,
-		alloc:    prometheus.NewDesc("slurm_nodes_alloc", "Allocated nodes", nil, nil),
-		comp:     prometheus.NewDesc("slurm_nodes_comp", "Completing nodes", nil, nil),
-		down:     prometheus.NewDesc("slurm_nodes_down", "Down nodes", nil, nil),
-		draining: prometheus.NewDesc("slurm_nodes_draining", "Draining nodes", nil, nil),
-		drained:  prometheus.NewDesc("slurm_nodes_drained", "Draining nodes", nil, nil),
-		err:      prometheus.NewDesc("slurm_nodes_err", "Error nodes", nil, nil),
-		fail:     prometheus.NewDesc("slurm_nodes_fail", "Fail nodes", nil, nil),
-		idle:     prometheus.NewDesc("slurm_nodes_idle", "Idle nodes", nil, nil),
-		maint:    prometheus.NewDesc("slurm_nodes_maint", "Maint nodes", nil, nil),
-		mix:      prometheus.NewDesc("slurm_nodes_mix", "Mix nodes", nil, nil),
-		resv:     prometheus.NewDesc("slurm_nodes_resv", "Reserved nodes", nil, nil),
+		s.aggregateNodeMetrics(state)
 	}
 }
 
-type NodesCollector struct {
-	isTest   bool
-	alloc    *prometheus.Desc
-	comp     *prometheus.Desc
-	down     *prometheus.Desc
-	draining *prometheus.Desc
-	drained  *prometheus.Desc
-	err      *prometheus.Desc
-	fail     *prometheus.Desc
-	idle     *prometheus.Desc
-	maint    *prometheus.Desc
-	mix      *prometheus.Desc
-	resv     *prometheus.Desc
+// aggregateNodeMetrics aggregates metricshttps://slurm.schedmd.com/sinfo.html
+// This aggregation shoudl be done on prometheus level
+// these are deprecated metrics
+func (s *nodesCollector) aggregateNodeMetrics(state string) {
+	switch strings.ToUpper(state) {
+	case "ALLOCATED":
+		s.alloc.WithLabelValues().Inc()
+	case "COMPLETING":
+		s.comp.WithLabelValues().Inc()
+	case "DOWN":
+		s.down.WithLabelValues().Inc()
+	case "DRAIN":
+		s.draining.WithLabelValues().Inc()
+	case "DRAINED":
+		s.drained.WithLabelValues().Inc()
+	case "FAILING":
+		s.err.WithLabelValues().Inc()
+	case "FAIL":
+		s.fail.WithLabelValues().Inc()
+	case "IDLE":
+		s.idle.WithLabelValues().Inc()
+	case "MAINT":
+		s.maint.WithLabelValues().Inc()
+	case "MIXED":
+		s.mix.WithLabelValues().Inc()
+	case "RESERVED":
+		s.resv.WithLabelValues().Inc()
+	}
 }
 
-// Send all metric descriptions
-func (nc *NodesCollector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- nc.alloc
-	ch <- nc.comp
-	ch <- nc.down
-	ch <- nc.draining
-	ch <- nc.drained
-	ch <- nc.err
-	ch <- nc.fail
-	ch <- nc.idle
-	ch <- nc.maint
-	ch <- nc.mix
-	ch <- nc.resv
+func (s *nodesCollector) Describe(ch chan<- *prometheus.Desc) {
+	s.scontrolNodesInfo.Describe(ch)
+	s.scontrolNodeCPUAllocated.Describe(ch)
+	s.scontrolNodeCPULoad.Describe(ch)
+	s.scontrolNodeCPUTot.Describe(ch)
+	s.scontrolNodeMemoryAllocated.Describe(ch)
+	s.scontrolNodeMemoryFree.Describe(ch)
+	s.scontrolNodeMemoryTot.Describe(ch)
+	s.scontrolNodeGPUTot.Describe(ch)
+	s.scontrolNodeGPUFree.Describe(ch)
+	// Old metrics, keeping them for dashboards/alerts compatibility reasons
+	s.cpuAlloc.Describe(ch)
+	s.cpuIdle.Describe(ch)
+	s.cpuOther.Describe(ch)
+	s.cpuTotal.Describe(ch)
+	s.memAlloc.Describe(ch)
+	s.memTotal.Describe(ch)
+	s.alloc.Describe(ch)
+	s.comp.Describe(ch)
+	s.down.Describe(ch)
+	s.draining.Describe(ch)
+	s.drained.Describe(ch)
+	s.err.Describe(ch)
+	s.fail.Describe(ch)
+	s.idle.Describe(ch)
+	s.maint.Describe(ch)
+	s.mix.Describe(ch)
+	s.resv.Describe(ch)
 }
-func (nc *NodesCollector) Collect(ch chan<- prometheus.Metric) {
-	nm := nc.GetNodesMetrics()
-	ch <- prometheus.MustNewConstMetric(nc.alloc, prometheus.GaugeValue, nm.alloc)
-	ch <- prometheus.MustNewConstMetric(nc.comp, prometheus.GaugeValue, nm.comp)
-	ch <- prometheus.MustNewConstMetric(nc.down, prometheus.GaugeValue, nm.down)
-	ch <- prometheus.MustNewConstMetric(nc.draining, prometheus.GaugeValue, nm.draining)
-	ch <- prometheus.MustNewConstMetric(nc.drained, prometheus.GaugeValue, nm.drained)
-	ch <- prometheus.MustNewConstMetric(nc.err, prometheus.GaugeValue, nm.err)
-	ch <- prometheus.MustNewConstMetric(nc.fail, prometheus.GaugeValue, nm.fail)
-	ch <- prometheus.MustNewConstMetric(nc.idle, prometheus.GaugeValue, nm.idle)
-	ch <- prometheus.MustNewConstMetric(nc.maint, prometheus.GaugeValue, nm.maint)
-	ch <- prometheus.MustNewConstMetric(nc.mix, prometheus.GaugeValue, nm.mix)
-	ch <- prometheus.MustNewConstMetric(nc.resv, prometheus.GaugeValue, nm.resv)
+
+func (s *nodesCollector) Collect(ch chan<- prometheus.Metric) {
+	s.scontrolNodesInfo.Reset()
+	s.scontrolNodeCPUAllocated.Reset()
+	s.scontrolNodeCPULoad.Reset()
+	s.scontrolNodeCPUTot.Reset()
+	s.scontrolNodeMemoryAllocated.Reset()
+	s.scontrolNodeMemoryFree.Reset()
+	s.scontrolNodeMemoryTot.Reset()
+	s.scontrolNodeGPUFree.Reset()
+	s.scontrolNodeGPUTot.Reset()
+	// Old metrics, keeping them for dashboards/alerts compatibility reasons
+	s.cpuAlloc.Reset()
+	s.cpuIdle.Reset()
+	s.cpuOther.Reset()
+	s.cpuTotal.Reset()
+	s.memAlloc.Reset()
+	s.memTotal.Reset()
+	s.alloc.Reset()
+	s.comp.Reset()
+	s.down.Reset()
+	s.draining.Reset()
+	s.drained.Reset()
+	s.err.Reset()
+	s.fail.Reset()
+	s.idle.Reset()
+	s.maint.Reset()
+	s.mix.Reset()
+	s.resv.Reset()
+	s.getNodesMetrics()
+	s.scontrolNodesInfo.Collect(ch)
+	s.scontrolNodeCPUAllocated.Collect(ch)
+	s.scontrolNodeCPULoad.Collect(ch)
+	s.scontrolNodeCPUTot.Collect(ch)
+	s.scontrolNodeMemoryAllocated.Collect(ch)
+	s.scontrolNodeMemoryFree.Collect(ch)
+	s.scontrolNodeMemoryTot.Collect(ch)
+	s.scontrolNodeGPUFree.Collect(ch)
+	s.scontrolNodeGPUTot.Collect(ch)
+	// Old metrics, keeping them for dashboards/alerts compatibility reasons
+	s.cpuAlloc.Collect(ch)
+	s.cpuIdle.Collect(ch)
+	s.cpuOther.Collect(ch)
+	s.cpuTotal.Collect(ch)
+	s.memAlloc.Collect(ch)
+	s.memTotal.Collect(ch)
+	s.alloc.Collect(ch)
+	s.comp.Collect(ch)
+	s.down.Collect(ch)
+	s.draining.Collect(ch)
+	s.drained.Collect(ch)
+	s.err.Collect(ch)
+	s.fail.Collect(ch)
+	s.idle.Collect(ch)
+	s.maint.Collect(ch)
+	s.mix.Collect(ch)
+	s.resv.Collect(ch)
+}
+
+type NodeDetails struct {
+	Meta struct {
+		Plugin struct {
+			Type string `json:"type"`
+			Name string `json:"name"`
+		} `json:"plugin"`
+		Slurm struct {
+			Version struct {
+				Major int `json:"major"`
+				Micro int `json:"micro"`
+				Minor int `json:"minor"`
+			} `json:"version"`
+			Release string `json:"release"`
+		} `json:"Slurm"`
+	} `json:"meta"`
+	Errors []interface{} `json:"errors"`
+	Nodes  []struct {
+		Architecture              string      `json:"architecture"`
+		BurstbufferNetworkAddress string      `json:"burstbuffer_network_address"`
+		Boards                    int         `json:"boards"`
+		BootTime                  int         `json:"boot_time"`
+		Comment                   string      `json:"comment"`
+		Cores                     int         `json:"cores"`
+		CPUBinding                int         `json:"cpu_binding"`
+		CPULoad                   int         `json:"cpu_load"`
+		Extra                     string      `json:"extra"`
+		FreeMemory                int         `json:"free_memory"`
+		Cpus                      int         `json:"cpus"`
+		LastBusy                  int         `json:"last_busy"`
+		Features                  string      `json:"features"`
+		ActiveFeatures            string      `json:"active_features"`
+		Gres                      string      `json:"gres"`
+		GresDrained               string      `json:"gres_drained"`
+		GresUsed                  string      `json:"gres_used"`
+		McsLabel                  string      `json:"mcs_label"`
+		Name                      string      `json:"name"`
+		NextStateAfterReboot      string      `json:"next_state_after_reboot"`
+		Address                   string      `json:"address"`
+		Hostname                  string      `json:"hostname"`
+		State                     string      `json:"state"`
+		StateFlags                []string    `json:"state_flags"`
+		NextStateAfterRebootFlags []string    `json:"next_state_after_reboot_flags"`
+		OperatingSystem           string      `json:"operating_system"`
+		Owner                     interface{} `json:"owner"`
+		Partitions                []string    `json:"partitions"`
+		Port                      int         `json:"port"`
+		RealMemory                int         `json:"real_memory"`
+		Reason                    string      `json:"reason"`
+		ReasonChangedAt           int         `json:"reason_changed_at"`
+		ReasonSetByUser           interface{} `json:"reason_set_by_user"`
+		SlurmdStartTime           int         `json:"slurmd_start_time"`
+		Sockets                   int         `json:"sockets"`
+		Threads                   int         `json:"threads"`
+		TemporaryDisk             int         `json:"temporary_disk"`
+		Weight                    int         `json:"weight"`
+		Tres                      string      `json:"tres"`
+		SlurmdVersion             string      `json:"slurmd_version"`
+		AllocMemory               int         `json:"alloc_memory"`
+		AllocCpus                 int         `json:"alloc_cpus"`
+		IdleCpus                  int         `json:"idle_cpus"`
+		TresUsed                  string      `json:"tres_used"`
+		TresWeighted              float64     `json:"tres_weighted"`
+	} `json:"nodes"`
 }

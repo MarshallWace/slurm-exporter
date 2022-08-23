@@ -91,7 +91,7 @@ func NewJobsCollector(isTest bool) *jobsCollector {
 	}
 }
 
-func (s *jobsCollector) getScontrolMetrics() {
+func (s *jobsCollector) getJobsMetrics() {
 	// Get json data
 	data := getData(s.isTest, showJobsCommand, showJobsTestDataInput)
 
@@ -146,7 +146,7 @@ func (s *jobsCollector) Collect(ch chan<- prometheus.Metric) {
 	s.jobsReqBilling.Reset()
 	s.jobsReqNodes.Reset()
 	s.jobsRestartCount.Reset()
-	s.getScontrolMetrics()
+	s.getJobsMetrics()
 	s.jobsInfo.Collect(ch)
 	s.jobExecDuration.Collect(ch)
 	s.jobSchedlingDuration.Collect(ch)
