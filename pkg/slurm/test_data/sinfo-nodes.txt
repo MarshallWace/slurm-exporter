@@ -1,0 +1,5 @@
+94,allocated
+1,down*
+2,draining
+1,drained
+54,mixed

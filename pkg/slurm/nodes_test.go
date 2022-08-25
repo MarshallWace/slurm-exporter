@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 )
@@ -18,16 +19,16 @@ func TestNodesNodeMetrics(t *testing.T) {
 }
 
 // TestGenerateNodesNodeMetrics is only used to getnerate the .prom file for
-// func TestGenerateNodesNodeMetrics(t *testing.T) {
-// 	reg := prometheus.NewRegistry()
-// 	collector := NewNodesCollector(true)
-// 	err := reg.Register(collector)
-// 	assert.NoError(t, err)
-// 	err = reg.Register(ExporterErrors)
-// 	assert.NoError(t, err)
-// 	_, err = reg.Gather()
-// 	assert.NoError(t, err)
-// 	gatherers := prometheus.Gatherers{reg}
-// 	err = prometheus.WriteToTextfile(showNodesDetailsTestDataProm, gatherers)
-// 	assert.NoError(t, err)
-// }
+func TestGenerateNodesNodeMetrics(t *testing.T) {
+	reg := prometheus.NewRegistry()
+	collector := NewNodesCollector(true)
+	err := reg.Register(collector)
+	assert.NoError(t, err)
+	err = reg.Register(ExporterErrors)
+	assert.NoError(t, err)
+	_, err = reg.Gather()
+	assert.NoError(t, err)
+	gatherers := prometheus.Gatherers{reg}
+	err = prometheus.WriteToTextfile(showNodesDetailsTestDataProm, gatherers)
+	assert.NoError(t, err)
+}
