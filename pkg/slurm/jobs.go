@@ -74,19 +74,19 @@ func NewJobsCollector(isTest bool) *jobsCollector {
 			prometheus.GaugeOpts{
 				Subsystem: "",
 				Name:      "slurm_job_req_billing",
-				Help:      "Requested Memory per job.",
+				Help:      "Requested billing per job.",
 			}, jobLabels),
 		jobsReqNodes: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Subsystem: "",
 				Name:      "slurm_job_req_nodes",
-				Help:      "Requested Memory per job.",
+				Help:      "Requested Nodes per job.",
 			}, jobLabels),
 		jobsRestartCount: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Subsystem: "",
 				Name:      "slurm_job_restart_count",
-				Help:      "Requested Memory per job.",
+				Help:      "Requested Restart count per job.",
 			}, jobLabels),
 	}
 }

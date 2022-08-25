@@ -233,10 +233,7 @@ func (s *nodesCollector) getNodesMetrics() {
 	// create metrics from json object
 	for _, n := range nodes.Nodes {
 		// Prepare state and reason variables
-		state := n.State
-		if len(n.StateFlags) > 0 {
-			state = strings.Join(n.StateFlags, "-")
-		}
+		state := evaluateState(n.State, n.StateFlags)
 		reason := ""
 		if n.Reason != "" {
 			reason = fmt.Sprintf("%s by %s", n.Reason, n.ReasonSetByUser)
@@ -288,18 +285,18 @@ func (s *nodesCollector) getNodesMetrics() {
 	}
 }
 
-// aggregateNodeMetrics aggregates metricshttps://slurm.schedmd.com/sinfo.html
+// aggregateNodeMetrics aggregates metrics https://slurm.schedmd.com/sinfo.html
 // This aggregation shoudl be done on prometheus level
 // these are deprecated metrics
 func (s *nodesCollector) aggregateNodeMetrics(state string) {
-	switch strings.ToUpper(state) {
+	switch state {
 	case "ALLOCATED":
 		s.alloc.WithLabelValues().Inc()
 	case "COMPLETING":
 		s.comp.WithLabelValues().Inc()
 	case "DOWN":
 		s.down.WithLabelValues().Inc()
-	case "DRAIN":
+	case "DRAINING":
 		s.draining.WithLabelValues().Inc()
 	case "DRAINED":
 		s.drained.WithLabelValues().Inc()
@@ -315,6 +312,25 @@ func (s *nodesCollector) aggregateNodeMetrics(state string) {
 		s.mix.WithLabelValues().Inc()
 	case "RESERVED":
 		s.resv.WithLabelValues().Inc()
+	}
+}
+
+func evaluateState(state string, stateFlags []string) string {
+	if len(stateFlags) == 0 {
+		return strings.ToUpper(state)
+	}
+	stateCombination := strings.ToUpper(state + "-" + strings.Join(stateFlags, "_"))
+	switch stateCombination {
+	case "IDLE-DRAIN":
+		return "DRAINED"
+	case "MIXED-DRAIN":
+		return "DRAINING"
+	case "ALLOCATED-DRAIN":
+		return "DRAINING"
+	case "DOWN-NOT_RESPONDING":
+		return "DOWN"
+	default:
+		return stateCombination
 	}
 }
 
