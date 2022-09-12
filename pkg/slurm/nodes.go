@@ -15,6 +15,10 @@ const (
 	showNodesDetailsTestDataProm  = "./test_data/sinfo-nodes.prom"
 )
 
+var (
+	nodeResourcesLabels = []string{"name", "partition"}
+)
+
 type nodesCollector struct {
 	scontrolNodesInfo           *prometheus.GaugeVec
 	scontrolNodeCPULoad         *prometheus.GaugeVec
@@ -64,56 +68,56 @@ func NewNodesCollector(isTest bool) *nodesCollector {
 				Name:      "slurm_node_cpu_load",
 				Help:      "CPU Load per node as reported by slurm CLI.",
 			},
-			[]string{"name"}),
+			nodeResourcesLabels),
 		scontrolNodeCPUTot: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Subsystem: "",
 				Name:      "slurm_node_cpu_tot",
 				Help:      "CPU total available per node as reported by slurm CLI.",
 			},
-			[]string{"name"}),
+			nodeResourcesLabels),
 		scontrolNodeCPUAllocated: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Subsystem: "",
 				Name:      "slurm_node_cpu_allocated",
 				Help:      "CPU Allocated per node as reported by slurm CLI.",
 			},
-			[]string{"name"}),
+			nodeResourcesLabels),
 		scontrolNodeMemoryTot: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Subsystem: "",
 				Name:      "slurm_node_memory_total_bytes",
 				Help:      "Total memory per node as reported by slurm CLI.",
 			},
-			[]string{"name"}),
+			nodeResourcesLabels),
 		scontrolNodeMemoryAllocated: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Subsystem: "",
 				Name:      "slurm_node_memory_allocated_bytes",
 				Help:      "Allocated memory per node as reported by slurm CLI.",
 			},
-			[]string{"name"}),
+			nodeResourcesLabels),
 		scontrolNodeMemoryFree: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Subsystem: "",
 				Name:      "slurm_node_memory_free_bytes",
 				Help:      "Free memory per node as reported by slurm CLI.",
 			},
-			[]string{"name"}),
+			nodeResourcesLabels),
 		scontrolNodeGPUTot: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Subsystem: "",
 				Name:      "slurm_node_gpu_tot",
 				Help:      "Number of total GPU on the node.",
 			},
-			[]string{"name"}),
+			nodeResourcesLabels),
 		scontrolNodeGPUFree: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Subsystem: "",
 				Name:      "slurm_node_gpu_free",
 				Help:      "Number of free GPU on the node.",
 			},
-			[]string{"name"}),
+			nodeResourcesLabels),
 
 		// Old metrics, keeping them for dashboards/alerts compatibility reasons
 
@@ -243,35 +247,36 @@ func (s *nodesCollector) getNodesMetrics() {
 			for _, feature := range strings.Split(n.ActiveFeatures, ",") {
 				s.scontrolNodesInfo.WithLabelValues(n.Name, n.Architecture, partition, feature, n.Address, n.SlurmdVersion, n.OperatingSystem, strconv.Itoa(n.Weight), state, reason).Set(1)
 			}
-		}
-		// Now populating all other metrics
-		s.scontrolNodeCPUTot.WithLabelValues(n.Name).Set(float64(n.Cpus))
-		s.scontrolNodeCPUAllocated.WithLabelValues(n.Name).Set(float64(n.AllocCpus))
-		s.scontrolNodeCPULoad.WithLabelValues(n.Name).Set(float64(n.CPULoad) / 100)
-		s.scontrolNodeMemoryTot.WithLabelValues(n.Name).Set(float64(n.RealMemory))
-		s.scontrolNodeMemoryFree.WithLabelValues(n.Name).Set(float64(n.FreeMemory))
-		s.scontrolNodeMemoryAllocated.WithLabelValues(n.Name).Set(float64(n.AllocMemory))
-		gpuTot := 0
-		if n.Gres != "" {
-			// this is a bit obscure, but the standard gres configuration is `gpu:nvidia:3` and we need to get the 3
-			gpuTot, err = strconv.Atoi(strings.Split(n.Gres, ":")[2])
-			if err != nil {
-				ExporterErrors.WithLabelValues("atoi-gpu-tot", err.Error()).Inc()
-				fmt.Println(err)
+			// Now populating all other metrics
+			s.scontrolNodeCPUTot.WithLabelValues(n.Name, partition).Set(float64(n.Cpus))
+			s.scontrolNodeCPUAllocated.WithLabelValues(n.Name, partition).Set(float64(n.AllocCpus))
+			s.scontrolNodeCPULoad.WithLabelValues(n.Name, partition).Set(float64(n.CPULoad) / 100)
+			s.scontrolNodeMemoryTot.WithLabelValues(n.Name, partition).Set(float64(n.RealMemory))
+			s.scontrolNodeMemoryFree.WithLabelValues(n.Name, partition).Set(float64(n.FreeMemory))
+			s.scontrolNodeMemoryAllocated.WithLabelValues(n.Name, partition).Set(float64(n.AllocMemory))
+			gpuTot := 0
+			if n.Gres != "" {
+				// this is a bit obscure, but the standard gres configuration is `gpu:nvidia:3` and we need to get the 3
+				gpuTot, err = strconv.Atoi(strings.Split(n.Gres, ":")[2])
+				if err != nil {
+					ExporterErrors.WithLabelValues("atoi-gpu-tot", err.Error()).Inc()
+					fmt.Println(err)
+				}
+
 			}
+			gpuUsed := 0
+			if n.GresUsed != "gpu:0" {
+				// this is a bit obscure, but the standard gres configuration is `gpu:nvidia:0(IDX:N\/A)` and we need to get the 0
+				gpuUsed, err = strconv.Atoi(strings.Split(strings.Split(n.GresUsed, "(")[0], ":")[2])
+				if err != nil {
+					ExporterErrors.WithLabelValues("atoi-gpu-used", err.Error()).Inc()
+					fmt.Println(err)
+				}
+			}
+			s.scontrolNodeGPUTot.WithLabelValues(n.Name, partition).Set(float64(gpuTot))
+			s.scontrolNodeGPUFree.WithLabelValues(n.Name, partition).Set(float64(gpuTot - gpuUsed))
 
 		}
-		gpuUsed := 0
-		if n.GresUsed != "gpu:0" {
-			// this is a bit obscure, but the standard gres configuration is `gpu:nvidia:0(IDX:N\/A)` and we need to get the 0
-			gpuUsed, err = strconv.Atoi(strings.Split(strings.Split(n.GresUsed, "(")[0], ":")[2])
-			if err != nil {
-				ExporterErrors.WithLabelValues("atoi-gpu-used", err.Error()).Inc()
-				fmt.Println(err)
-			}
-		}
-		s.scontrolNodeGPUTot.WithLabelValues(n.Name).Set(float64(gpuTot))
-		s.scontrolNodeGPUFree.WithLabelValues(n.Name).Set(float64(gpuTot - gpuUsed))
 
 		// Old metrics, keeping them for dashboards/alerts compatibility reasons
 		s.cpuAlloc.WithLabelValues(n.Name, state).Set(float64(n.AllocCpus))
