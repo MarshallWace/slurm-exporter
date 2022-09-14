@@ -187,3 +187,10 @@ You should have received a copy of the GNU General Public License along with thi
 `docker-corelib-local.artifactory.mwam.local/prometheus-slurm-exporter:0.1.0`
 
 Check repo for latest tag
+
+## Useful prometheus queries
+
+```promql
+# List of all nodes in given partitions
+group(slurm_node_info{partition=~"Live|Integ"}) by (address)
+```
