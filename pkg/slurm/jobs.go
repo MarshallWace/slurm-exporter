@@ -19,7 +19,7 @@ const (
 )
 
 var (
-	jobLabels       = []string{"name", "job_id", "job_state", "state_reason", "partition", "user", "node"}
+	jobLabels       = []string{"name", "job_id", "state", "state_reason", "partition", "user", "node"}
 	durationBuckets = prometheus.ExponentialBucketsRange(minHistogramBucketRange, maxHistogramBucketRange, numberOfHistogramBuckets)
 )
 
