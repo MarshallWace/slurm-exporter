@@ -30,6 +30,7 @@ type nodesCollector struct {
 	scontrolNodeGPUTot          *prometheus.GaugeVec
 	scontrolNodeGPUFree         *prometheus.GaugeVec
 	isTest                      bool
+	nodeAddressSuffix           string
 
 	// Old metrics, keeping them for dashboards/alerts compatibility reasons
 	cpuAlloc *prometheus.GaugeVec
@@ -51,10 +52,11 @@ type nodesCollector struct {
 	resv     *prometheus.GaugeVec
 }
 
-func NewNodesCollector(isTest bool) *nodesCollector {
+func NewNodesCollector(isTest bool, nodeAddressSuffix string) *nodesCollector {
 	labelsOldmetrics := []string{"node", "status"}
 	return &nodesCollector{
-		isTest: isTest,
+		isTest:            isTest,
+		nodeAddressSuffix: nodeAddressSuffix,
 		scontrolNodesInfo: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Subsystem: "",
@@ -245,7 +247,8 @@ func (s *nodesCollector) getNodesMetrics() {
 		// Iterating over partitions and active_features
 		for _, partition := range n.Partitions {
 			for _, feature := range strings.Split(n.ActiveFeatures, ",") {
-				s.scontrolNodesInfo.WithLabelValues(n.Name, n.Architecture, partition, feature, n.Address, n.SlurmdVersion, n.OperatingSystem, strconv.Itoa(n.Weight), state, reason).Set(1)
+				fqdn := n.Address + s.nodeAddressSuffix
+				s.scontrolNodesInfo.WithLabelValues(n.Name, n.Architecture, partition, feature, fqdn, n.SlurmdVersion, n.OperatingSystem, strconv.Itoa(n.Weight), state, reason).Set(1)
 			}
 			// Now populating all other metrics
 			s.scontrolNodeCPUTot.WithLabelValues(n.Name, partition).Set(float64(n.Cpus))

@@ -60,7 +60,7 @@ func readFile(filePath string) string {
 	return string(rawData)
 }
 
-func NewRegistry(gpuCollectorEnabled bool, exectimeout int) (*prometheus.Registry, error) {
+func NewRegistry(gpuCollectorEnabled bool, exectimeout int, nodeAddressSuffix string) (*prometheus.Registry, error) {
 	reg := prometheus.NewRegistry()
 	execTimeoutSeconds = exectimeout
 	err := reg.Register(NewAccountsCollector()) // from accounts.go
@@ -99,7 +99,7 @@ func NewRegistry(gpuCollectorEnabled bool, exectimeout int) (*prometheus.Registr
 	if err != nil {
 		return nil, err
 	}
-	err = reg.Register(NewNodesCollector(false)) // from scontrol.go
+	err = reg.Register(NewNodesCollector(false, nodeAddressSuffix)) // from scontrol.go
 	if err != nil {
 		return nil, err
 	}
