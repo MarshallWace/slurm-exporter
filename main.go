@@ -43,13 +43,18 @@ var execTimeoutSeconds = flag.Int(
 	10,
 	"Timeout when executing shell commands")
 
+var nodeAddressSuffix = flag.String(
+	"address-suffix",
+	".mwam.local",
+	"Suffix to add the node address when reporting metrics")
+
 func main() {
 	flag.Parse()
 
 	if *gpuAcct {
 		prometheus.MustRegister(slurm.NewGPUsCollector()) // from gpus.go
 	}
-	reg, err := slurm.NewRegistry(*gpuAcct, *execTimeoutSeconds)
+	reg, err := slurm.NewRegistry(*gpuAcct, *execTimeoutSeconds, *nodeAddressSuffix)
 	if err != nil {
 		log.Fatalln(err)
 	}

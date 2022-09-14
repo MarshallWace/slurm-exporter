@@ -9,7 +9,7 @@ import (
 )
 
 func TestNodesNodeMetrics(t *testing.T) {
-	collector := NewNodesCollector(true)
+	collector := NewNodesCollector(true, ".mwam.local")
 	f, err := os.Open(showNodesDetailsTestDataProm)
 	assert.NoError(t, err)
 	defer f.Close()
@@ -20,7 +20,7 @@ func TestNodesNodeMetrics(t *testing.T) {
 // TestGenerateNodesNodeMetrics is only used to getnerate the .prom file for
 // func TestGenerateNodesNodeMetrics(t *testing.T) {
 // 	reg := prometheus.NewRegistry()
-// 	collector := NewNodesCollector(true)
+// 	collector := NewNodesCollector(true, ".mwam.local")
 // 	err := reg.Register(collector)
 // 	assert.NoError(t, err)
 // 	err = reg.Register(ExporterErrors)
