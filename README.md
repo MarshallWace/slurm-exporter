@@ -194,3 +194,11 @@ Check repo for latest tag
 # List of all nodes in given partitions
 group(slurm_node_info{partition=~"Live|Integ"}) by (address)
 ```
+
+
+
+sum(slurm_job_info{partition=~"$live_partitions",job_state=~"RUNNING|COMPLETED"}) by (job_state)
+
+
+
+avg(instance:node_cpu_utilization:ratio{instance=~"$live_partitions_hosts"})
