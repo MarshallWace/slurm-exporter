@@ -45,7 +45,7 @@ var execTimeoutSeconds = flag.Int(
 
 var nodeAddressSuffix = flag.String(
 	"address-suffix",
-	".mwam.local",
+	"",
 	"Suffix to add the node address when reporting metrics")
 
 func main() {
