@@ -9,7 +9,7 @@ import (
 )
 
 func TestJobsMetrics(t *testing.T) {
-	collector := NewJobsCollector(true)
+	collector := NewJobsCollector(true, nil)
 	f, err := os.Open(showJobsTestDataProm)
 	assert.NoError(t, err)
 	defer f.Close()
@@ -20,7 +20,7 @@ func TestJobsMetrics(t *testing.T) {
 // TestGenerateJobsMetrics is only used to getnerate the .prom file for
 // func TestGenerateJobsMetrics(t *testing.T) {
 // 	reg := prometheus.NewRegistry()
-// 	collector := NewJobsCollector(true)
+// 	collector := NewJobsCollector(true, nil)
 // 	err := reg.Register(collector)
 // 	assert.NoError(t, err)
 // 	gatherers := prometheus.Gatherers{reg}
