@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	searchQuery          = "-LLL -E pr=1000/noprompt -h ldap.mwam.local -b dc=mwam,dc=local objectClass=user"
+	searchQuery          = "-LLL -E pr=1000/noprompt -h ldap.mwam.local -b dc=mwam,dc=local (&(objectClass=user)(uidNumber=*)(sAMAccountName=*))"
 	attributeKeyUID      = "uidNumber"
 	attributeKeyUsername = "sAMAccountName"
 )
@@ -27,7 +27,7 @@ func Init(testFile string) (*Search, error) {
 	var output []byte
 	var err error
 	if testFile == "" {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, "ldapsearch", strings.Split(searchQuery, " ")...)
 		stderr := ""
@@ -35,15 +35,8 @@ func Init(testFile string) (*Search, error) {
 		cmd.Stderr = buf
 		output, err = cmd.Output()
 		if err != nil {
-			// We need to handle error code 4 specifically because we're requesting too much data and even if ldap is returning it to us, it's still complaining
-			if err.(*exec.ExitError).ExitCode() != 4 {
-				return nil, fmt.Errorf("error running ldapserarch %v: %v - stderr: %v", err, string(output), buf.String())
-			}
+			return nil, fmt.Errorf("error running ldapserarch %v: %v - stderr: %v", err, string(output), buf.String())
 		}
-		// err = ioutil.WriteFile("./testdata/written.ldif", output, 0644)
-		// if err != nil {
-		// 	return nil, err
-		// }
 	} else {
 		output, err = ioutil.ReadFile(testFile)
 		if err != nil {
