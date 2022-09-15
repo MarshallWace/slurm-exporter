@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/vpenso/prometheus-slurm-exporter/pkg/ldapsearch"
 )
 
 const (
@@ -33,11 +34,13 @@ type jobsCollector struct {
 	jobExecDuration      *prometheus.HistogramVec
 	jobSchedlingDuration *prometheus.HistogramVec
 	isTest               bool
+	ldap                 *ldapsearch.Search
 }
 
-func NewJobsCollector(isTest bool) *jobsCollector {
+func NewJobsCollector(isTest bool, ldap *ldapsearch.Search) *jobsCollector {
 	return &jobsCollector{
 		isTest: isTest,
+		ldap:   ldap,
 		jobsInfo: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Subsystem: "",
@@ -107,6 +110,9 @@ func (s *jobsCollector) getJobsMetrics() {
 		user := job.UserName
 		if user == "" {
 			user = strconv.Itoa(job.UserID)
+			if s.ldap != nil {
+				user = s.ldap.GetUsername(user)
+			}
 		}
 		labelValues := []string{job.Name, strconv.Itoa(job.JobID), job.JobState, job.StateReason, job.Partition, user, job.Nodes}
 		s.jobsInfo.WithLabelValues(labelValues...).Set(1)

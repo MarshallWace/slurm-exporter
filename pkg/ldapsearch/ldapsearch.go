@@ -14,16 +14,16 @@ import (
 )
 
 const (
-	searchQuery          = "-LLL -z 1 -E pr=1000/noprompt -h ldap.mwam.local -b dc=mwam,dc=local objectClass=user"
+	searchQuery          = "-LLL -E pr=1000/noprompt -h ldap.mwam.local -b dc=mwam,dc=local objectClass=user"
 	attributeKeyUID      = "uidNumber"
 	attributeKeyUsername = "sAMAccountName"
 )
 
-type search struct {
+type Search struct {
 	uids map[string]string
 }
 
-func Init(testFile string) (*search, error) {
+func Init(testFile string) (*Search, error) {
 	var output []byte
 	var err error
 	if testFile == "" {
@@ -33,14 +33,17 @@ func Init(testFile string) (*search, error) {
 		stderr := ""
 		buf := bytes.NewBufferString(stderr)
 		cmd.Stderr = buf
-		output, err := cmd.Output()
+		output, err = cmd.Output()
 		if err != nil {
 			// We need to handle error code 4 specifically because we're requesting too much data and even if ldap is returning it to us, it's still complaining
 			if err.(*exec.ExitError).ExitCode() != 4 {
 				return nil, fmt.Errorf("error running ldapserarch %v: %v - stderr: %v", err, string(output), buf.String())
 			}
-			return nil, fmt.Errorf("error running ldapserarch %v: %v - stderr: %v", err, string(output), buf.String())
 		}
+		// err = ioutil.WriteFile("./testdata/written.ldif", output, 0644)
+		// if err != nil {
+		// 	return nil, err
+		// }
 	} else {
 		output, err = ioutil.ReadFile(testFile)
 		if err != nil {
@@ -52,9 +55,10 @@ func Init(testFile string) (*search, error) {
 		return nil, err
 	}
 	u := map[string]string{}
-	s := search{
+	s := Search{
 		uids: u,
 	}
+	log.Printf("Found %v entries! \n", len(objects.Entries))
 	for _, entry := range objects.Entries {
 		obj := entry.Entry
 		uid := ""
@@ -65,18 +69,19 @@ func Init(testFile string) (*search, error) {
 			}
 			if attr.Name == attributeKeyUsername {
 				username = strings.Join(attr.Values, "-")
-				log.Println("Found username: ", username)
+				// log.Println("Found username: ", username)
 			}
 		}
 		if uid != "" {
 			s.uids[uid] = username
 		}
 	}
+	// log.Println(s.uids)
 	return &s, nil
 }
 
 // GetUsername is used to very quickly retried a username from memory
-func (s *search) GetUsername(uid string) string {
+func (s *Search) GetUsername(uid string) string {
 	user, ok := s.uids[uid]
 	if !ok {
 		return uid

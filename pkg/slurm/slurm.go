@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/vpenso/prometheus-slurm-exporter/pkg/ldapsearch"
 )
 
 var (
@@ -103,7 +104,12 @@ func NewRegistry(gpuCollectorEnabled bool, exectimeout int, nodeAddressSuffix st
 	if err != nil {
 		return nil, err
 	}
-	err = reg.Register(NewJobsCollector(false)) // from jobs.go
+	ldap, err := ldapsearch.Init("")
+	if err != nil {
+		ExporterErrors.WithLabelValues("ldapsearch", err.Error()).Inc()
+		fmt.Println(err)
+	}
+	err = reg.Register(NewJobsCollector(false, ldap)) // from jobs.go
 	if err != nil {
 		return nil, err
 	}
@@ -113,5 +119,6 @@ func NewRegistry(gpuCollectorEnabled bool, exectimeout int, nodeAddressSuffix st
 			return nil, err
 		}
 	}
+
 	return reg, nil
 }
