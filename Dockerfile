@@ -9,6 +9,6 @@ COPY --from=builder /app/prometheus-slurm-exporter /prometheus-slurm-exporter
 RUN yum install slurm openldap-clients -y && \
     mkdir -p /var/log/munge && \
     adduser --system svc-slurm && \
-    adduser --system -u 1932653032 -g 0 svc-monitoring-p
+    adduser --system -u 1932654360 -g 0 svc-slurm-monitor-p
 COPY ./docker-entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
