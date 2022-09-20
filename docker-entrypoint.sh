@@ -5,4 +5,4 @@ set -e
 /usr/sbin/munged --force
 
 # Starting slurm exporter
-su - svc-monitoring-p -c /prometheus-slurm-exporter "${@}"
+su - svc-slurm-monitor-p -c /prometheus-slurm-exporter "${@}"
