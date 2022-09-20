@@ -8,7 +8,7 @@ FROM docker-corelib-local.artifactory.mwam.local/mwam-ubi8:0.1.13
 COPY --from=builder /app/prometheus-slurm-exporter /prometheus-slurm-exporter
 RUN yum install slurm openldap-clients -y && \
     mkdir -p /var/log/munge && \
-    adduser --system svc-slurm
+    adduser --system svc-slurm && \
     adduser --system -u 1932653032 -g 0 svc-monitoring-p
 COPY ./docker-entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
