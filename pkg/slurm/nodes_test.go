@@ -1,4 +1,4 @@
-/* Copyright 2017 Victor Penso, Matteo Dessalvi
+/* Copyright 2022 Marshall Wace Asset Management
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by

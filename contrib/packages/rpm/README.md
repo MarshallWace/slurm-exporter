@@ -19,18 +19,18 @@ echo "%_topdir $HOME/rpmbuild" > ~/.rpmmacros
  
 4. Clone this repo:
 ```bash
-git clone https://github.com/vpenso/prometheus-slurm-exporter.git
+git clone https://github.com/MarshallWace/slurm-exporter.git
 ```
 5. Get into the source directory and copy the following files under ``~/rpmbuild/SOURCES``:
 ```bash
-cd prometheus-slurm-exporter
+cd slurm-exporter
 cp README.md ~/rpmbuild/SOURCES
 cp LICENSE ~/rpmbuild/SOURCES
-cp lib/systemd/prometheus-slurm-exporter.service ~/rpmbuild/SOURCES
+cp lib/systemd/slurm-exporter.service ~/rpmbuild/SOURCES
 ```
 6. Copy the SPEC file in the proper directory:
 ```bash
-cd prometheus-slurm-exporter
+cd slurm-exporter
 cp packages/rpm/*.spec ~/rpmbuild/SPECS
 ```
 
@@ -39,6 +39,6 @@ cp packages/rpm/*.spec ~/rpmbuild/SPECS
 8. Build the RPM based on your SPEC file:
 ```bash
 cd $HOME/rpmbuild/SPECS
-rpmbuild -ba prometheus-slurm-exporter.spec
+rpmbuild -ba slurm-exporter.spec
 ```
 9. The RPM package will be placed under $HOME/rpmbuild/RPMS/x86_64

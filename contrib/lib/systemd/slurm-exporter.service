@@ -2,7 +2,7 @@
 Description=Prometheus SLURM Exporter
 
 [Service]
-ExecStart=/usr/bin/prometheus-slurm-exporter
+ExecStart=/usr/bin/slurm-exporter
 Restart=always
 RestartSec=15
 

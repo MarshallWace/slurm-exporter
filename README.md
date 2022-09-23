@@ -2,7 +2,7 @@
 
 Prometheus collector and exporter for metrics extracted from the [Slurm](https://slurm.schedmd.com/overview.html) resource scheduling system.
 
-> This work use https://github.com/vpenso/prometheus-slurm-exporter as starting point
+> This work uses https://github.com/vpenso/prometheus-slurm-exporter as starting point
 
 ## Exported Metrics
 
@@ -58,7 +58,7 @@ Since version **0.18**, the following information are also extracted and exporte
 * Memory: _allocated_ and in _total_.
 * Labels: hostname and its Slurm status (e.g. _idle_, _mix_, _allocated_, _draining_, etc.).
 
-See the related [test data](https://github.com/vpenso/prometheus-slurm-exporter/blob/master/test_data/sinfo_mem.txt) to check the format of the information extracted from Slurm.
+See the related [test data](https://github.com/MarshallWace/slurm-exporter/blob/master/test_data/sinfo_mem.txt) to check the format of the information extracted from Slurm.
 
 ### Status of the Jobs
 
@@ -119,9 +119,9 @@ Collect _share_ statistics for every Slurm account. Refer to the [manpage of the
 ## Installation
 
 * Read [DEVELOPMENT.md](DEVELOPMENT.md) in order to build the Prometheus Slurm Exporter. After a successful build copy the executable
-`bin/prometheus-slurm-exporter` to a node with access to the Slurm command-line interface.
+`bin/slurm-exporter` to a node with access to the Slurm command-line interface.
 
-* A [Systemd Unit][sdu] file to run the executable as service is available in [lib/systemd/prometheus-slurm-exporter.service](lib/systemd/prometheus-slurm-exporter.service).
+* A [Systemd Unit][sdu] file to run the executable as service is available in [contrib/lib/systemd/slurm-exporter.service](contrib/lib/systemd/slurm-exporter.service).
 
 * (**optional**) Distribute the exporter as a Snap package: consult the [following document](packages/snap/README.md). **NOTE**: this method requires the use of [Snap](https://snapcraft.io), which is built by [Canonical](https://canonical.com).
 
@@ -167,11 +167,11 @@ Checking prometheus.yml
 A [dashboard](https://grafana.com/dashboards/4323) is available in order to
 visualize the exported metrics through [Grafana](https://grafana.com):
 
-![Status of the Nodes](images/Node_Status.png)
+![Status of the Nodes](contrib/images/Node_Status.png)
 
-![Status of the Jobs](images/Job_Status.png)
+![Status of the Jobs](contrib/images/Job_Status.png)
 
-![SLURM Scheduler Information](images/Scheduler_Info.png)
+![SLURM Scheduler Information](contrib/images/Scheduler_Info.png)
 
 
 ## License

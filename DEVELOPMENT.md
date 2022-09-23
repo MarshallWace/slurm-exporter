@@ -21,8 +21,8 @@ Use Git to clone the source code of the exporter, run all the tests and build th
 
 ```bash
 # clone the source code
-git clone https://github.com/vpenso/prometheus-slurm-exporter.git
-cd prometheus-slurm-exporter
+git clone https://github.com/MarshallWace/slurm-exporter.git
+cd slurm-exporter
 make
 ```
 
@@ -35,13 +35,13 @@ make test
 Start the exporter (foreground), and query all metrics:
 
 ```bash
-./bin/prometheus-slurm-exporter
+./bin/slurm-exporter
 ```
 
 If you wish to run the exporter on a different port, or the default port (8080) is already in use, run with the following argument:
 
 ```bash
-./bin/prometheus-slurm-exporter --listen-address="0.0.0.0:<port>"
+./bin/slurm-exporter --listen-address="0.0.0.0:<port>"
 ...
 
 # query all metrics (default port)

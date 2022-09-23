@@ -1,4 +1,4 @@
-/* Copyright 2017-2020 Victor Penso, Matteo Dessalvi, Joeri Hermans
+/* Copyright 2017-2022 Victor Penso, Matteo Dessalvi, Joeri Hermans, Marshall Wace Asset Management
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -21,10 +21,10 @@ import (
 
 	"log"
 
+	"github.com/MarshallWace/slurm-exporter/pkg/slurm"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/vpenso/prometheus-slurm-exporter/pkg/slurm"
 )
 
 var listenAddress = flag.String(

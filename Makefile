@@ -1,4 +1,4 @@
-PROJECT_NAME = prometheus-slurm-exporter
+PROJECT_NAME = slurm-exporter
 SHELL := $(shell which bash) -eu -o pipefail
 
 GOPATH := $(shell pwd)/go/modules

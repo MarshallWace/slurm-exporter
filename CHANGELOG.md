@@ -1,6 +1,6 @@
 ## Changelog
 
-Full commit history per tag: https://github.com/vpenso/prometheus-slurm-exporter/commits/{tag number}
+Full commit history per tag: https://github.com/MarshallWace/slurm-exporter/commits/{tag number}
 
 * **0.19**
   - Merge PR#50

@@ -1,5 +1,5 @@
 # Building the prometheus-slurm-exporter snap
-Packaging and delivering the prometheus-slurm-exporter as a snap provides users of prometheus-slurm-exporter
+Packaging and delivering the slurm-exporter as a snap provides users of slurm-exporter
 a hardened, streamlined, and idempotent experience when consuming this software. See [snapcraft](https://snapcraft.io/) for more information on snaps. 
 
 
@@ -21,12 +21,12 @@ snapcraft --use-lxd
 Once the snap build has completed, list the current working directory to see the resultant snap artifact.
 ```bash
 $ ls -la *.snap
--rw-r--r-- 1 bdx bdx 5562368 Aug 16 18:19 prometheus-slurm-exporter_0.11-1-g01dd959_amd64.snap
+-rw-r--r-- 1 bdx bdx 5562368 Aug 16 18:19 slurm-exporter_0.11-1-g01dd959_amd64.snap
 ```
 
 ### Install locally built snap
 ```bash
-sudo snap install prometheus-slurm-exporter_`git describe --tags`_amd64.snap --classic --dangerous
+sudo snap install slurm-exporter_`git describe --tags`_amd64.snap --classic --dangerous
 ```
 * `--classic` - this snap uses classic confinement to allow it to find the slurm commands in the system.
 * `--dangerous` - because we are installing this snap from a local resource and sha can't be verified by the snapstore.
@@ -35,13 +35,13 @@ sudo snap install prometheus-slurm-exporter_`git describe --tags`_amd64.snap --c
 Use `ps` to verify the process is running.
 ```bash
 $ ps aux | grep prometheus | head -1
-root     2271391  0.0  0.0 1453596 14012 ?       SLsl 18:32   0:00 /snap/prometheus-slurm-exporter/x1/bin/prometheus-slurm-exporter
+root     2271391  0.0  0.0 1453596 14012 ?       SLsl 18:32   0:00 /snap/slurm-exporter/x1/bin/slurm-exporter
 ```
 
-Use `netstat` to verify that the installed `prometheus-slurm-exporter` snap process is listening on port 8080.
+Use `netstat` to verify that the installed `slurm-exporter` snap process is listening on port 8080.
 ```bash
 $ sudo netstat -peanut | grep prometheus
-tcp6       0      0 :::8080                 :::*                    LISTEN      0          15042010   2271391/prometheus-slurm-exporter
+tcp6       0      0 :::8080                 :::*                    LISTEN      0          15042010   2271391/slurm-exporter
 ```
 
 Lastly, curl the metrics endpoint.
@@ -90,7 +90,7 @@ slurm_scheduler_mean_cycle 481
 ...
 ```
 
-To uninstall the prometheus-slurm-exporter snap:
+To uninstall the slurm-exporter snap:
 ```bash
-sudo snap remove prometheus-slurm-exporter
+sudo snap remove slurm-exporter
 ```
