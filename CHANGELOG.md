@@ -2,6 +2,10 @@
 
 Full commit history per tag: https://github.com/MarshallWace/slurm-exporter/commits/{tag number}
 
+
+* **1.0**
+  - First release under new repository location and with updated metrics
+
 * **0.19**
   - Merge PR#50
 
