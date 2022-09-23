@@ -13,24 +13,13 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 
-package main
+package slurm
 
 import (
-	"io/ioutil"
-	"os"
 	"testing"
 )
 
-func TestParseQueueMetrics(t *testing.T) {
-	// Read the input data from a file
-	file, err := os.Open("test_data/squeue.txt")
-	if err != nil {
-		t.Fatalf("Can not open test data: %v", err)
-	}
-	data, err := ioutil.ReadAll(file)
-	t.Logf("%+v", ParseQueueMetrics(data))
-}
-
-func TestQueueGetMetrics(t *testing.T) {
-	t.Logf("%+v", QueueGetMetrics())
+func TestSchedulerGetMetrics(t *testing.T) {
+	coll := NewSchedulerCollector(true)
+	t.Logf("%+v", coll.SchedulerGetMetrics())
 }

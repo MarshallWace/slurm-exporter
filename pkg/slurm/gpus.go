@@ -13,15 +13,13 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 
-package main
+package slurm
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/log"
-	"io/ioutil"
-	"os/exec"
-	"strings"
 	"strconv"
+	"strings"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type GPUsMetrics struct {
@@ -38,15 +36,18 @@ func GPUsGetMetrics() *GPUsMetrics {
 func ParseAllocatedGPUs() float64 {
 	var num_gpus = 0.0
 
-	args := []string{"-a", "-X", "--format=Allocgres", "--state=RUNNING", "--noheader", "--parsable2"}
-	output := string(Execute("sacct", args))
+	output := execCommand("sacct -a -X --format=AllocTRES --state=RUNNING --noheader --parsable2")
 	if len(output) > 0 {
 		for _, line := range strings.Split(output, "\n") {
 			if len(line) > 0 {
 				line = strings.Trim(line, "\"")
-				descriptor := strings.TrimPrefix(line, "gpu:")
-				job_gpus, _ := strconv.ParseFloat(descriptor, 64)
-				num_gpus += job_gpus
+				for _, resource := range strings.Split(line, ",") {
+					if strings.HasPrefix(resource, "gres/gpu=") {
+						descriptor := strings.TrimPrefix(resource, "gres/gpu=")
+						job_gpus, _ := strconv.ParseFloat(descriptor, 64)
+						num_gpus += job_gpus
+					}
+				}
 			}
 		}
 	}
@@ -56,18 +57,22 @@ func ParseAllocatedGPUs() float64 {
 
 func ParseTotalGPUs() float64 {
 	var num_gpus = 0.0
-
-	args := []string{"-h", "-o \"%n %G\""}
-	output := string(Execute("sinfo", args))
-	if len(output) > 0 {
-		for _, line := range strings.Split(output, "\n") {
+	out := execCommand("sinfo -h -o \"%n %G\"")
+	if len(out) > 0 {
+		for _, line := range strings.Split(out, "\n") {
 			if len(line) > 0 {
 				line = strings.Trim(line, "\"")
-				descriptor := strings.Fields(line)[1]
-				descriptor = strings.TrimPrefix(descriptor, "gpu:")
-				descriptor = strings.Split(descriptor, "(")[0]
-				node_gpus, _ :=  strconv.ParseFloat(descriptor, 64)
-				num_gpus += node_gpus
+				gres := strings.Fields(line)[1]
+				// gres column format: comma-delimited list of resources
+				for _, resource := range strings.Split(gres, ",") {
+					if strings.HasPrefix(resource, "gpu:") {
+						// format: gpu:<type>:N(S:<something>), e.g. gpu:RTX2070:2(S:0)
+						descriptor := strings.Split(resource, ":")[2]
+						descriptor = strings.Split(descriptor, "(")[0]
+						node_gpus, _ := strconv.ParseFloat(descriptor, 64)
+						num_gpus += node_gpus
+					}
+				}
 			}
 		}
 	}
@@ -86,23 +91,6 @@ func ParseGPUsMetrics() *GPUsMetrics {
 	return &gm
 }
 
-// Execute the sinfo command and return its output
-func Execute(command string, arguments []string) []byte {
-	cmd := exec.Command(command, arguments...)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := cmd.Start(); err != nil {
-		log.Fatal(err)
-	}
-	out, _ := ioutil.ReadAll(stdout)
-	if err := cmd.Wait(); err != nil {
-		log.Fatal(err)
-	}
-	return out
-}
-
 /*
  * Implement the Prometheus Collector interface and feed the
  * Slurm scheduler metrics into it.
@@ -111,9 +99,9 @@ func Execute(command string, arguments []string) []byte {
 
 func NewGPUsCollector() *GPUsCollector {
 	return &GPUsCollector{
-		alloc: prometheus.NewDesc("slurm_gpus_alloc", "Allocated GPUs", nil, nil),
-		idle:  prometheus.NewDesc("slurm_gpus_idle", "Idle GPUs", nil, nil),
-		total: prometheus.NewDesc("slurm_gpus_total", "Total GPUs", nil, nil),
+		alloc:       prometheus.NewDesc("slurm_gpus_alloc", "Allocated GPUs", nil, nil),
+		idle:        prometheus.NewDesc("slurm_gpus_idle", "Idle GPUs", nil, nil),
+		total:       prometheus.NewDesc("slurm_gpus_total", "Total GPUs", nil, nil),
 		utilization: prometheus.NewDesc("slurm_gpus_utilization", "Total GPU utilization", nil, nil),
 	}
 }

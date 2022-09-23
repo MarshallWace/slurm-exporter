@@ -17,47 +17,72 @@ package main
 
 import (
 	"flag"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/common/log"
 	"net/http"
-)
 
-func init() {
-	// Metrics have to be registered to be exposed
-	prometheus.MustRegister(NewAccountsCollector())       // from accounts.go
-	prometheus.MustRegister(NewCPUsCollector())           // from cpus.go
-	prometheus.MustRegister(NewNodesCollector())          // from nodes.go
-	prometheus.MustRegister(NewNodeCollector())           // from node.go
-	prometheus.MustRegister(NewPartitionsCollector())     // from partitions.go
-	prometheus.MustRegister(NewQueueCollector())          // from queue.go
-	prometheus.MustRegister(NewSchedulerCollector())      // from scheduler.go
-	prometheus.MustRegister(NewFairShareCollector())      // from sshare.go
-	prometheus.MustRegister(NewUsersCollector())          // from users.go
-}
+	"log"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/vpenso/prometheus-slurm-exporter/pkg/slurm"
+)
 
 var listenAddress = flag.String(
 	"listen-address",
 	":8080",
 	"The address to listen on for HTTP requests.")
 
+// Turn on GPUs accounting only if the corresponding command line option is set to true.
 var gpuAcct = flag.Bool(
 	"gpus-acct",
 	false,
 	"Enable GPUs accounting")
 
+var execTimeoutSeconds = flag.Int(
+	"exec-timeout",
+	10,
+	"Timeout when executing shell commands")
+
+var nodeAddressSuffix = flag.String(
+	"address-suffix",
+	"",
+	"Suffix to add the node address when reporting metrics")
+
+var ldapServer = flag.String(
+	"ldap-address",
+	"",
+	"Address to contact ldap server. if this is not set, this feature will be disable. if configured please configure --ldap-base-search as well")
+
+var ldapBaseSearch = flag.String(
+	"ldap-base-search",
+	"",
+	"Base search for the ldap server  (e.g. dc=example,dc=com)")
+
 func main() {
 	flag.Parse()
 
-	// Turn on GPUs accounting only if the corresponding command line option is set to true.
 	if *gpuAcct {
-		prometheus.MustRegister(NewGPUsCollector())   // from gpus.go
+		prometheus.MustRegister(slurm.NewGPUsCollector()) // from gpus.go
 	}
+	if *ldapServer != "" && *ldapBaseSearch == "" {
+		log.Fatalln("--ldap-address is configured but --ldap-base-search is not. please configure --ldap-base-search (e.g. dc=example,dc=com) ")
+	}
+
+	reg, err := slurm.NewRegistry(*gpuAcct, *execTimeoutSeconds, *nodeAddressSuffix, *ldapServer, *ldapBaseSearch)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	// Adding more collectors to the registry
+	reg.MustRegister(
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+		collectors.NewGoCollector(),
+	)
 
 	// The Handler function provides a default handler to expose metrics
 	// via an HTTP server. "/metrics" is the usual endpoint for that.
-	log.Infof("Starting Server: %s", *listenAddress)
-	log.Infof("GPUs Accounting: %t", *gpuAcct)
-	http.Handle("/metrics", promhttp.Handler())
+	log.Printf("Starting Server: %s", *listenAddress)
+	log.Printf("GPUs Accounting: %t", *gpuAcct)
+	http.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 	log.Fatal(http.ListenAndServe(*listenAddress, nil))
 }

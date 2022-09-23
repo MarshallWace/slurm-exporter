@@ -13,16 +13,19 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 
-package main
+package slurm
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
-	"io/ioutil"
-	"log"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/prometheus/client_golang/prometheus"
+)
+
+const (
+	schedulerCommand  = "sdiag"
+	schedulerTestData = "test_data/sdiag.txt"
 )
 
 /*
@@ -47,27 +50,11 @@ type SchedulerMetrics struct {
 	total_backfilled_heterogeneous    float64
 }
 
-// Execute the sdiag command and return its output
-func SchedulerData() []byte {
-	cmd := exec.Command("sdiag")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := cmd.Start(); err != nil {
-		log.Fatal(err)
-	}
-	out, _ := ioutil.ReadAll(stdout)
-	if err := cmd.Wait(); err != nil {
-		log.Fatal(err)
-	}
-	return out
-}
-
 // Extract the relevant metrics from the sdiag output
-func ParseSchedulerMetrics(input []byte) *SchedulerMetrics {
+func (sc *SchedulerCollector) SchedulerGetMetrics() *SchedulerMetrics {
 	var sm SchedulerMetrics
-	lines := strings.Split(string(input), "\n")
+	out := getData(sc.isTest, schedulerCommand, schedulerTestData)
+	lines := strings.Split(out, "\n")
 	// Guard variables to check for string repetitions in the output of sdiag
 	// (two occurencies of the following strings: 'Last cycle', 'Mean cycle')
 	lc_count := 0
@@ -124,11 +111,6 @@ func ParseSchedulerMetrics(input []byte) *SchedulerMetrics {
 	return &sm
 }
 
-// Returns the scheduler metrics
-func SchedulerGetMetrics() *SchedulerMetrics {
-	return ParseSchedulerMetrics(SchedulerData())
-}
-
 /*
  * Implement the Prometheus Collector interface and feed the
  * Slurm scheduler metrics into it.
@@ -137,6 +119,7 @@ func SchedulerGetMetrics() *SchedulerMetrics {
 
 // Collector strcture
 type SchedulerCollector struct {
+	isTest                            bool
 	threads                           *prometheus.Desc
 	queue_size                        *prometheus.Desc
 	dbd_queue_size                    *prometheus.Desc
@@ -169,7 +152,7 @@ func (c *SchedulerCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // Send the values of all metrics
 func (sc *SchedulerCollector) Collect(ch chan<- prometheus.Metric) {
-	sm := SchedulerGetMetrics()
+	sm := sc.SchedulerGetMetrics()
 	ch <- prometheus.MustNewConstMetric(sc.threads, prometheus.GaugeValue, sm.threads)
 	ch <- prometheus.MustNewConstMetric(sc.queue_size, prometheus.GaugeValue, sm.queue_size)
 	ch <- prometheus.MustNewConstMetric(sc.dbd_queue_size, prometheus.GaugeValue, sm.dbd_queue_size)
@@ -185,8 +168,9 @@ func (sc *SchedulerCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 // Returns the Slurm scheduler collector, used to register with the prometheus client
-func NewSchedulerCollector() *SchedulerCollector {
+func NewSchedulerCollector(isTest bool) *SchedulerCollector {
 	return &SchedulerCollector{
+		isTest: isTest,
 		threads: prometheus.NewDesc(
 			"slurm_scheduler_threads",
 			"Information provided by the Slurm sdiag command, number of scheduler threads ",
