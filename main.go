@@ -1,7 +1,4 @@
 // Copyright 2017-2022 Victor Penso, Matteo Dessalvi, Joeri Hermans
-// SPDX-FileCopyrightText: 2022 2022 Marshall Wace <opensource@mwam.com>
-//
-// SPDX-License-Identifier: GPL3
 
 package main
 

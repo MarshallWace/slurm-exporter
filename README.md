@@ -4,6 +4,9 @@ Prometheus collector and exporter for metrics extracted from the [Slurm](https:/
 
 > This work uses https://github.com/vpenso/prometheus-slurm-exporter as starting point
 
+This exporter is backward compatible with prometheus-slurm-exporter but exposes lots of more metrics and cardinality is very high.
+Please make sure you have enough capacity in your prometheus infrastructure before start scraping this new exporter
+
 ## Exported Metrics
 
 ### State of the CPUs
