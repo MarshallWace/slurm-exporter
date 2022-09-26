@@ -4,6 +4,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"net/http"
 
 	"log"
@@ -12,6 +13,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
+const (
+	appropriateLegalNotice = `
+Copyright 2017-2022 Victor Penso, Matteo Dessalvi, Joeri Hermans, Marhall Wace
+Victor Penso, Matteo Dessalvi, Joeri Hermans, Marhall Wace LICENSES THE LICENSED SOFTWARE "AS IS," AND MAKES NO EXPRESS OR IMPLIED WARRANTY OF ANY KIND. Victor Penso, Matteo Dessalvi, Joeri Hermans, Marhall Wace SPECIFICALLY DISCLAIMS ALL INDIRECT OR IMPLIED WARRANTIES TO THE FULL EXTENT ALLOWED BY APPLICABLE LAW, INCLUDING WITHOUT LIMITATION ALL IMPLIED WARRANTIES OF, NON-INFRINGEMENT, MERCHANTABILITY, TITLE OR FITNESS FOR ANY PARTICULAR PURPOSE. NO ORAL OR WRITTEN INFORMATION OR ADVICE GIVEN BY Victor Penso, Matteo Dessalvi, Joeri Hermans, Marhall Wace, ITS AGENTS OR EMPLOYEES SHALL CREATE A WARRANTY.
+`
 )
 
 var listenAddress = flag.String(
@@ -47,6 +55,7 @@ var ldapBaseSearch = flag.String(
 
 func main() {
 	flag.Parse()
+	fmt.Println(appropriateLegalNotice)
 
 	if *gpuAcct {
 		prometheus.MustRegister(slurm.NewGPUsCollector()) // from gpus.go

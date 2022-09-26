@@ -1,8 +1,10 @@
-# Prometheus Slurm Exporter
+# Slurm Exporter
 
 Prometheus collector and exporter for metrics extracted from the [Slurm](https://slurm.schedmd.com/overview.html) resource scheduling system.
 
 > This work uses https://github.com/vpenso/prometheus-slurm-exporter as starting point
+
+We took prometheus-slurm-exporter and we heavily modified to export highly detailed informations about nodes and jobs (26th Sept 2022) 
 
 This exporter is backward compatible with prometheus-slurm-exporter but exposes lots of more metrics and cardinality is very high.
 Please make sure you have enough capacity in your prometheus infrastructure before start scraping this new exporter
