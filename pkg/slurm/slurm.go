@@ -1,5 +1,6 @@
-// Copyright 2022 Marshall Wace Asset Management
-
+// SPDX-FileCopyrightText: 2022 2022 Marshall Wace <opensource@mwam.com>
+//
+// SPDX-License-Identifier: GPL3
 package slurm
 
 import (
